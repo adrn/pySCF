@@ -35,7 +35,7 @@ void accp_firstc(int nmax, int lmax, int zeroodd, int zeroeven, // INPUT
     double knl, arggam, deltam0;
 
     dblfact[1] = 1.;
-    for (l=2; l <= lmax; l++) {
+    for (l=2; l<=lmax; l++) {
         dblfact[l] = dblfact[l-1]*(2.*l-1.);
     }
 
@@ -80,7 +80,6 @@ void accp_firstc(int nmax, int lmax, int zeroodd, int zeroeven, // INPUT
     if (zeroeven) {
         *lmin = 1;
     }
-
 }
 
 void accp_LH(int nbodies, double *xyz, double *mass, int *ibound, // INPUT
@@ -108,15 +107,18 @@ void accp_LH(int nbodies, double *xyz, double *mass, int *ibound, // INPUT
     double ultrasp[(nmax+1)*(lmax+1)], ultraspt[(nmax+1)*(lmax+1)], ultrasp1[(nmax+1)*(lmax+1)];
     double plm[(lmax+1)*(lmax+1)], dplm[(lmax+1)*(lmax+1)];
 
-    printf("firstc %d\n", *firstc);
+    // printf("firstc %d\n", *firstc);
+    // printf("lmin lskip %d %d\n", *lmin, *lskip);
+
     if (*firstc) {
         accp_firstc(nmax, lmax, zeroodd, zeroeven,
-                    &dblfact[0], &twoalpha[0], &anltilde[0,0], &coeflm[0,0],
-                    lmin, lskip, &c1[0,0], &c2[0,0], &c3[0]);
+                    dblfact, twoalpha, anltilde, coeflm,
+                    lmin, lskip, c1, c2, c3);
         *firstc = 0;
     }
-
+    // printf("firstc %d\n", *firstc);
     // printf("lmin lskip %d %d\n", *lmin, *lskip);
+
     // printf("dblfact %f %f %f %f\n", dblfact[0], dblfact[1], dblfact[2], dblfact[3]);
     // printf("twoalpha %f %f %f %f\n", twoalpha[0], twoalpha[1], twoalpha[2], twoalpha[3]);
     // printf("anltilde %f %f %f %f\n", anltilde[0], anltilde[1], anltilde[2], anltilde[3]);

@@ -17,7 +17,7 @@ extern void accp_LH(int nbodies, double *xyz, double *mass, int *ibound,
                     double *sinsum, double *cossum,
                     double G, int *firstc,
                     double *dblfact, double *twoalpha, double *anltilde, double *coeflm,
-                    int lmin, int lskip,
+                    int *lmin, int *lskip,
                     double *c1, double *c2, double *c3,
                     double *pot,
                     double *acc);
@@ -27,7 +27,7 @@ extern void acc_pot(int selfgrav, int nbodies, double *xyz, double *mass, int *i
                     double *sinsum, double *cossum,
                     double G, int *firstc,
                     double *dblfact, double *twoalpha, double *anltilde, double *coeflm,
-                    int lmin, int lskip,
+                    int *lmin, int *lskip,
                     double *c1, double *c2, double *c3,
                     double *pot,
                     double *acc);
