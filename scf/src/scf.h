@@ -1,8 +1,15 @@
-extern int getIndex2D(int row, int col, int ncol);
+typedef struct {
+    int n_bodies;
+    int n_recenter;
+    int n_snapshot;
+    int n_tidal;
+    int nmax;
+    int lmax;
+    int zeroodd;
+    int zeroeven;
+} Config;
 
-extern int getIndex3D(int row, int col, int dep, int ncol, int ndep);
-
-extern void accp_firstc(int nmax, int lmax, int zeroodd, int zeroeven,
+extern void accp_firstc(Config config,
                         double *dblfact,
                         double *twoalpha,
                         double *anltilde,
@@ -12,8 +19,7 @@ extern void accp_firstc(int nmax, int lmax, int zeroodd, int zeroeven,
                         double *c2,
                         double *c3);
 
-extern void accp_LH(int nbodies, double *xyz, double *mass, int *ibound,
-                    int nmax, int lmax, int zeroodd, int zeroeven,
+extern void accp_LH(Config config, double *xyz, double *mass, int *ibound,
                     double *sinsum, double *cossum,
                     double G, int *firstc,
                     double *dblfact, double *twoalpha, double *anltilde, double *coeflm,
@@ -22,8 +28,8 @@ extern void accp_LH(int nbodies, double *xyz, double *mass, int *ibound,
                     double *pot,
                     double *acc);
 
-extern void acc_pot(int selfgrav, int nbodies, double *xyz, double *mass, int *ibound,
-                    int nmax, int lmax, int zeroodd, int zeroeven,
+extern void acc_pot(Config config, int selfgrav,
+                    double *xyz, double *mass, int *ibound,
                     double *sinsum, double *cossum,
                     double G, int *firstc,
                     double *dblfact, double *twoalpha, double *anltilde, double *coeflm,
@@ -32,6 +38,6 @@ extern void acc_pot(int selfgrav, int nbodies, double *xyz, double *mass, int *i
                     double *pot,
                     double *acc);
 
-extern void frame(int iter, int n_recenter,
-                  int nbodies, double *xyz, double *vxyz, double *mass,
-                  double *pot);
+extern void frame(Config config, int iter,
+                  double *xyz, double *vxyz, double *mass, double *pot,
+                  int *pot_idx, double *xyz_frame);

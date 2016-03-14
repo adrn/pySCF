@@ -18,8 +18,18 @@ import cython
 cimport cython
 
 cdef extern from "src/scf.h":
-    void accp_LH(int nbodies, double *xyz, double *mass, int *ibound,
-                 int nmax, int lmax, int zeroodd, int zeroeven,
+    ctypedef struct Config:
+        int n_bodies
+        int n_recenter
+        int n_snapshot
+        int n_tidal
+        int nmax
+        int lmax
+        int zeroodd
+        int zeroeven
+
+    void acc_pot(Config config, int selfgrav,
+                 double *xyz, double *mass, int *ibound,
                  double *sinsum, double *cossum,
                  double G, int *firstc,
                  double *dblfact, double *twoalpha, double *anltilde, double *coeflm,
@@ -28,19 +38,9 @@ cdef extern from "src/scf.h":
                  double *pot,
                  double *acc) nogil
 
-    void acc_pot(int selfgrav, int nbodies, double *xyz, double *mass, int *ibound,
-                 int nmax, int lmax, int zeroodd, int zeroeven,
-                 double *sinsum, double *cossum,
-                 double G, int *firstc,
-                 double *dblfact, double *twoalpha, double *anltilde, double *coeflm,
-                 int *lmin, int *lskip,
-                 double *c1, double *c2, double *c3,
-                 double *pot,
-                 double *acc) nogil
-
-    void frame(int iter, int n_recenter,
-               int nbodies, double *xyz, double *vxyz, double *mass,
-               double *pot) nogil
+    void frame(Config config, int iter,
+               double *xyz, double *vxyz, double *mass, double *pot,
+               int *pot_idx, double *xyz_frame) nogil
 
 cdef extern from "src/helpers.h":
     void indexx(int n, double *arrin, int *indx) nogil
@@ -64,11 +64,10 @@ def scf():
         double[::1] mass = np.ones(N) / N
         int[::1] ibound = np.ones(N, dtype=np.int32)
 
-        int n_recenter = 100
+        Config config
         int nmax = 6
         int lmax = 4
-        int zeroodd = 0
-        int zeroeven = 0
+
         int external_field = 1
         int selfgrav = 1
 
@@ -97,9 +96,17 @@ def scf():
         double[::1] xyz_frame = np.array([15.,0,0])
         double[::1] vxyz_frame = np.array([0,0.2,0])
 
+    config.n_bodies = N
+    config.n_recenter = 100
+    config.n_snapshot = 10
+    config.n_tidal = 100
+    config.nmax = nmax
+    config.lmax = lmax
+    config.zeroodd = 0
+    config.zeroeven = 0
+
     # this stuff follows `initsys`
-    acc_pot(selfgrav, N, &xyz[0,0], &mass[0], &ibound[0],
-            nmax, lmax, zeroodd, zeroeven,
+    acc_pot(config, selfgrav, &xyz[0,0], &mass[0], &ibound[0],
             &sinsum[0,0,0], &cossum[0,0,0],
             G, &firstc,
             &dblfact[0], &twoalpha[0], &anltilde[0,0], &coeflm[0,0],
@@ -107,8 +114,8 @@ def scf():
             &c1[0,0], &c2[0,0], &c3[0],
             &pot[0], &acc[0,0])
 
-    if external_field:
-        frame(0, n_recenter, N, &xyz[0,0], &vxyz[0,0], &mass[0], &pot[0])
+    # if external_field:
+    # frame(0, n_recenter, N, &xyz[0,0], &vxyz[0,0], &mass[0], &pot[0])
 
     # initvel(...stuff) # TODO
     # print(np.array(pot[:10]))

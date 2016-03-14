@@ -3,16 +3,9 @@
 #include "gsl/gsl_sf_gegenbauer.h"
 #include <math.h>
 #include "helpers.h"
+#include "scf.h"
 
-int getIndex2D(int row, int col, int ncol) {
-    return row*ncol + col;
-}
-
-int getIndex3D(int row, int col, int dep, int ncol, int ndep) {
-    return (row*ncol + col)*ndep + dep;
-}
-
-void accp_firstc(int nmax, int lmax, int zeroodd, int zeroeven, // INPUT
+void accp_firstc(Config config,
                  double *dblfact, // OUTPUT: length = lmax+1
                  double *twoalpha, // OUTPUT: length = lmax+1
                  double *anltilde, // OUTPUT: length = (nmax+1)*(lmax+1)
@@ -35,55 +28,54 @@ void accp_firstc(int nmax, int lmax, int zeroodd, int zeroeven, // INPUT
     double knl, arggam, deltam0;
 
     dblfact[1] = 1.;
-    for (l=2; l<=lmax; l++) {
+    for (l=2; l<=config.lmax; l++) {
         dblfact[l] = dblfact[l-1]*(2.*l-1.);
     }
 
-    for (n=0; n<=nmax; n++) {
-        for (l=0; l <= lmax; l++) {
+    for (n=0; n<=config.nmax; n++) {
+        for (l=0; l <= config.lmax; l++) {
             knl = 0.5*n*(n+4.*l+3.)+(l+1.)*(2.*l+1.);
 
-            idx = getIndex2D(n,l,lmax+1);
+            idx = getIndex2D(n,l,config.lmax+1);
             anltilde[idx] = pow(-2.,(8.*l+6.)) * gsl_sf_fact(n)*(n+2.*l+1.5);
             anltilde[idx] = anltilde[idx] * pow(gsl_sf_gamma(2*l + 1.5), 2);
             anltilde[idx] = anltilde[idx] / (4.*M_PI*knl*gsl_sf_fact(n+4*l+2));
         }
     }
 
-    for (l=0; l <= lmax; l++) {
+    for (l=0; l <= config.lmax; l++) {
         twoalpha[l] = 2.*(2.*l+1.5);
         for (m=0; m<=l; m++) {
             deltam0 = 2.;
             if (m == 0)
                 deltam0 = 1.;
 
-            idx = getIndex2D(l,m,lmax+1);
+            idx = getIndex2D(l,m,config.lmax+1);
             coeflm[idx] = (2.*l+1.) * deltam0 * gsl_sf_fact(l-m) / gsl_sf_fact(l+m);
         }
     }
 
-    for (n=1; n<=nmax; n++) {
+    for (n=1; n<=config.nmax; n++) {
         c3[n] = 1. / (n+1.);
-        for (l=0; l<=lmax; l++) {
-            idx = getIndex2D(n,l,lmax+1);
+        for (l=0; l<=config.lmax; l++) {
+            idx = getIndex2D(n,l,config.lmax+1);
             c1[idx] = 2.0*n + twoalpha[l];
             c2[idx] = n-1.0 + twoalpha[l];
         }
     }
 
     *lskip = 1;
-    if (zeroodd || zeroeven) {
+    if (config.zeroodd || config.zeroeven) {
         *lskip = 2;
     }
 
     *lmin = 0;
-    if (zeroeven) {
+    if (config.zeroeven) {
         *lmin = 1;
     }
 }
 
-void accp_LH(int nbodies, double *xyz, double *mass, int *ibound, // INPUT
-             int nmax, int lmax, int zeroodd, int zeroeven, // INPUT
+void accp_LH(Config config, double *xyz, double *mass, int *ibound, // INPUT
              double *sinsum, double *cossum, // INPUT: length = (nmax+1)*(lmax+1)*(lmax+1) (to avoid re-defining)
              double G, int *firstc, // INPUT
              double *dblfact, double *twoalpha, double *anltilde, double *coeflm,
@@ -103,6 +95,8 @@ void accp_LH(int nbodies, double *xyz, double *mass, int *ibound, // INPUT
     double clm, dlm, elm, flm;
 
     // TODO: should I define all of this outside?
+    int lmax = config.lmax;
+    int nmax = config.nmax;
     double cosmphi[lmax+1], sinmphi[lmax+1];
     double ultrasp[(nmax+1)*(lmax+1)], ultraspt[(nmax+1)*(lmax+1)], ultrasp1[(nmax+1)*(lmax+1)];
     double plm[(lmax+1)*(lmax+1)], dplm[(lmax+1)*(lmax+1)];
@@ -111,7 +105,7 @@ void accp_LH(int nbodies, double *xyz, double *mass, int *ibound, // INPUT
     // printf("lmin lskip %d %d\n", *lmin, *lskip);
 
     if (*firstc) {
-        accp_firstc(nmax, lmax, zeroodd, zeroeven,
+        accp_firstc(config,
                     dblfact, twoalpha, anltilde, coeflm,
                     lmin, lskip, c1, c2, c3);
         *firstc = 0;
@@ -139,7 +133,7 @@ void accp_LH(int nbodies, double *xyz, double *mass, int *ibound, // INPUT
     }
 
     // This loop computes the BFE coefficients for all bound particles
-    for (k=0; k<nbodies; k++) {
+    for (k=0; k<config.n_bodies; k++) {
         // printf("%d\n", k);
 
         if (ibound[k] > 0) { // skip unbound particles
@@ -223,7 +217,7 @@ void accp_LH(int nbodies, double *xyz, double *mass, int *ibound, // INPUT
     }
 
     // This loop computes the acceleration and potential at each particle given the BFE coeffs
-    for (k=0; k<nbodies; k++) {
+    for (k=0; k<config.n_bodies; k++) {
         j = 3*k; // x,y,z in same 2D array
 
         r = sqrt(xyz[j]*xyz[j] + xyz[j+1]*xyz[j+1] + xyz[j+2]*xyz[j+2]);
@@ -341,17 +335,16 @@ void accp_LH(int nbodies, double *xyz, double *mass, int *ibound, // INPUT
 
 }
 
-void accp_external(int nbodies, double *xyz,
+void accp_external(Config config, double *xyz,
                    double *pot, double *acc) {
     int k;
-    for (k=0; k<nbodies; k++) {
+    for (k=0; k<config.n_bodies; k++) {
         // TODO:
     }
 }
 
-void acc_pot(int selfgrav,
-             int nbodies, double *xyz, double *mass, int *ibound, // INPUT
-             int nmax, int lmax, int zeroodd, int zeroeven, // INPUT
+void acc_pot(Config config, int selfgrav,
+             double *xyz, double *mass, int *ibound, // INPUT
              double *sinsum, double *cossum, // INPUT: length = (nmax+1)*(lmax+1)*(lmax+1) (to avoid re-defining)
              double G, int *firstc, // INPUT
              double *dblfact, double *twoalpha, double *anltilde, double *coeflm,
@@ -363,29 +356,28 @@ void acc_pot(int selfgrav,
     int j,k;
 
     if (selfgrav) {
-        accp_LH(nbodies, xyz, mass, ibound,
-                nmax, lmax, zeroodd, zeroeven,
+        accp_LH(config, xyz, mass, ibound,
                 sinsum, cossum, G, firstc,
                 dblfact, twoalpha, anltilde, coeflm, lmin, lskip,
                 c1, c2, c3, pot, acc);
 
-        accp_external(nbodies, xyz, pot, acc);
+        accp_external(config, xyz, pot, acc);
 
     } else {
-        for (k=0; k<nbodies; k++) {
+        for (k=0; k<config.n_bodies; k++) {
             j = 3*k;
             acc[j+0] = 0.;
             acc[j+1] = 0.;
             acc[j+2] = 0.;
             pot[k] = 0.;
         }
-        accp_external(nbodies, xyz, pot, acc);
+        accp_external(config, xyz, pot, acc);
     }
 }
 
-void frame(int iter, int n_recenter,
-           int nbodies, double *xyz, double *vxyz, double *mass,
-           double *pot) {
+void frame(Config config, int iter,
+           double *xyz, double *vxyz, double *mass, double *pot,
+           int *pot_idx, double *xyz_frame) {
     /*
     Shift the phase-space coordinates to be centered on the minimum potential.
     The initial value is the input position and velocity of the progenitor system.
@@ -396,19 +388,48 @@ void frame(int iter, int n_recenter,
         The index of the current iteration (starting from 0).
     n_recenter : int
         After how many steps should we recenter the ...
-    */
-    double idx[nbodies];
-    int nend = nbodies / 100; // take the most bound particles (?)
+    n_bodies : int
+        Number of particles.
 
-    double mred;
+    pot_idx : int* (array, length=n_bodies)
+        Index array to sort particles based on potential value.
+    */
+
+    int nend = config.n_bodies / 100; // take the most bound particles (?)
+    int i,j,k;
+
+    double mred = 0.;
     double xyz_min[3];
     memset(xyz_min, 0, 3*sizeof(double));
 
-    if ((iter == 0) || ((iter % n_recenter) == 0)) {
-        indexx(nbodies, pot, idx);
+    if ((iter == 0) || ((iter % config.n_recenter) == 0)) {
+        indexx(config.n_bodies, pot, pot_idx);
     }
 
+    for (i=0; i<nend; i++) {
+        j = pot_idx[i];
+        k = getIndex2D(j,0,3);
+        xyz_min[0] = xyz_min[0] + mass[j]*xyz[k];
+        xyz_min[1] = xyz_min[1] + mass[j]*xyz[k+1];
+        xyz_min[2] = xyz_min[2] + mass[j]*xyz[k+2];
+        mred = mred + mass[j];
+    }
 
+    xyz_min[0] = xyz_min[0] / mred;
+    xyz_min[1] = xyz_min[1] / mred;
+    xyz_min[2] = xyz_min[2] / mred;
+
+    // Update frame and shift to center on the minimum of the potential
+    xyz_frame[0] = xyz_frame[0] + xyz_min[0];
+    xyz_frame[1] = xyz_frame[1] + xyz_min[1];
+    xyz_frame[2] = xyz_frame[2] + xyz_min[2];
+
+    for (i=0; i<config.n_bodies; i++) {
+        k = getIndex2D(i,0,3);
+        xyz[k] = xyz[k] - xyz_min[0];
+        xyz[k+1] = xyz[k+1] - xyz_min[1];
+        xyz[k+1] = xyz[k+1] - xyz_min[2];
+    }
 
 }
 
