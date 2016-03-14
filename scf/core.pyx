@@ -42,6 +42,9 @@ cdef extern from "src/scf.h":
                int nbodies, double *xyz, double *vxyz, double *mass,
                double *pot) nogil
 
+cdef extern from "src/helpers.h":
+    void indexx(int n, double *arrin, int *indx) nogil
+
 def scf():
     # read SCFBI file
     skip = 1
@@ -54,11 +57,10 @@ def scf():
         int N = 128
         double G = 1.
         int firstc = 1
-        int* firstc_ptr = &firstc
 
         # turn these into (n_bodies,3) arrays
-        double[:,::1] xyz = np.vstack([bodies[n] for n in ['x','y','z']]).T[:N]
-        double[:,::1] vxyz = np.vstack([bodies[n] for n in ['vx','vy','vz']]).T[:N]
+        double[:,::1] xyz = np.ascontiguousarray(np.vstack([bodies[n] for n in ['x','y','z']]).T[:N])
+        double[:,::1] vxyz = np.ascontiguousarray(np.vstack([bodies[n] for n in ['vx','vy','vz']]).T[:N])
         double[::1] mass = np.ones(N) / N
         int[::1] ibound = np.ones(N, dtype=np.int32)
 
