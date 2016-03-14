@@ -11,7 +11,9 @@ def get_extensions():
     cfg['include_dirs'].append('scf/src')
     cfg['sources'].append('scf/core.pyx')
     cfg['sources'].append('scf/src/scf.c')
+    cfg['sources'].append('scf/src/indexx.c')
     cfg['sources'].append('scf/src/helpers.c')
+    cfg['sources'].append('scf/src/nrutil.c')
     cfg['libraries'] = ['gsl', 'gslcblas']
     cfg['extra_compile_args'] = ['--std=gnu99']
 
