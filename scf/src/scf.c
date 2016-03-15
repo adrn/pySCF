@@ -480,73 +480,73 @@ void step_pos(Config config, Bodies b, double dt,
     *tnow = *tpos;
 }
 
-// void tidal_start(Config config, double *xyz, double *vxyz, double *mass,
-//                  double dt, double *tnow, double *tpos, double *tvel) {
-//     double v_cm[3], a_cm[3], mtot, t_tidal, strength;
-//     int i,j,k,n;
+void tidal_start(Config config, Bodies b, Placeholders p,
+                 double dt, double *tnow, double *tpos, double *tvel) {
+    double v_cm[3], a_cm[3], mtot, t_tidal, strength;
+    int i,k,n;
+    int not_firstc = 0;
 
-//     for (n=0; n<config.n_tidal; n++) {
+    for (n=0; n<config.n_tidal; n++) {
 
-//         // Advance position by one step
-//         step_pos(config, xyz, vxyz, dt, tnow, tpos)
+        // Advance position by one step
+        step_pos(config, b, dt, tnow, tpos);
 
-//         // Find center-of-mass vel. and acc.
-//         for (i=0; i<3; i++) {
-//             v_cm[i] = 0.;
-//             a_cm[i] = 0.;
-//         }
+        // Find center-of-mass vel. and acc.
+        for (i=0; i<3; i++) {
+            v_cm[i] = 0.;
+            a_cm[i] = 0.;
+        }
 
-//         for (k=0; k<config.n_bodies; k++) {
-//             j = 3*k;
-//             mtot = mtot + mass[k];
+        for (k=0; k<config.n_bodies; k++) {
+            mtot = mtot + b.mass[k];
 
-//             v_cm[j]   = v_cm[j]   + mass[k]*vxyz[j];
-//             v_cm[j+1] = v_cm[j+1] + mass[k]*vxyz[j+1];
-//             v_cm[j+2] = v_cm[j+2] + mass[k]*vxyz[j+2];
+            v_cm[0] = v_cm[0] + b.mass[k]*b.vx[k];
+            v_cm[1] = v_cm[1] + b.mass[k]*b.vy[k];
+            v_cm[2] = v_cm[2] + b.mass[k]*b.vz[k];
 
-//             a_cm[j]   = a_cm[j]   + mass[k]*acc[j];
-//             a_cm[j+1] = a_cm[j+1] + mass[k]*acc[j+1];
-//             a_cm[j+2] = a_cm[j+2] + mass[k]*acc[j+2];
-//         }
+            a_cm[0] = a_cm[0] + b.mass[k]*b.ax[k];
+            a_cm[1] = a_cm[1] + b.mass[k]*b.ay[k];
+            a_cm[2] = a_cm[2] + b.mass[k]*b.az[k];
+        }
 
-//         v_cm[j]   = v_cm[j]   / mtot
-//         v_cm[j+1] = v_cm[j+1] / mtot
-//         v_cm[j+2] = v_cm[j+2] / mtot
-//         a_cm[j]   = a_cm[j]   / mtot
-//         a_cm[j+1] = a_cm[j+1] / mtot
-//         a_cm[j+2] = a_cm[j+2] / mtot
+        for (i=0; i<3; i++) {
+            v_cm[i] = v_cm[i]/mtot;
+            a_cm[i] = a_cm[i]/mtot;
+        }
 
-//         // Retard position and velocity by one step relative to center of mass??
-//         for (k=0; k<config.n_bodies; k++) {
-//             j = 3*k;
+        // Retard position and velocity by one step relative to center of mass??
+        for (k=0; k<config.n_bodies; k++) {
+            b.x[k] = b.x[k] - v_cm[0]*dt;
+            b.y[k] = b.y[k] - v_cm[1]*dt;
+            b.z[k] = b.z[k] - v_cm[2]*dt;
 
-//             xyz[j] = xyz[j] - v_cm[j]*dt;
-//             xyz[j+1] = xyz[j+1] - v_cm[j+1]*dt;
-//             xyz[j+2] = xyz[j+2] - v_cm[j+2]*dt;
+            b.vx[k] = b.vx[k] - a_cm[0]*dt;
+            b.vy[k] = b.vy[k] - a_cm[1]*dt;
+            b.vz[k] = b.vz[k] - a_cm[2]*dt;
+        }
 
-//             vxyz[j] = vxyz[j] - a_cm[j]*dt;
-//             vxyz[j+1] = vxyz[j+1] - a_cm[j+1]*dt;
-//             vxyz[j+2] = vxyz[j+2] - a_cm[j+2]*dt;
-//         }
+        // Increase tidal field
+        t_tidal = ((double)n) / ((double)config.n_tidal);
+        strength = (-2.*t_tidal + 3.)*t_tidal*t_tidal;
 
-//         // Increase tidal field
-//         t_tidal = ((double)n) / ((double)config.n_tidal);
-//         strength = (-2.*t_tidal + 3.)*t_tidal*t_tidal;
+        // Find new accelerations
+        acc_pot(config, strength, b, p, &not_firstc);
 
-//         // Find new accelerations
-//         acc_pot(config, selfgrav, strength, xyz, mass,
-//                 ibound, sinsum, cossum, G, firstc,
-//                 dblfact, twoalpha, anltilde, coeflm,
-//                 lmin, lskip, c1, c2, c3, pot, acc);
+        // Advance velocity by one step
+        step_vel(config, b, dt, tnow, tvel);
 
-//         // Advance velocity by one step
-//         step_pos(config, vxyz, acc, dt, tnow, tvel)
+        // Reset times
+        *tvel = 0.5*dt;
+        *tpos = 0.;
+        *tnow = 0.;
 
-//         // Reset times
-//         *tvel = 0.5*dt;
-//         *tpos = 0.;
-//         *tnow = 0.
-//     }
+        printf("Tidal start: %d\n", n);
+    }
 
+    // TODO: corrvel(correct)
+    // TODO: frame(i)
+    // TODO: findrem(i)
+    // TODO: outlog
+    // TODO: corrvel(reset)
 
-// }
+}

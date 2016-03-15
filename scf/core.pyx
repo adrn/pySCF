@@ -82,6 +82,9 @@ cdef extern from "src/scf.h":
     void step_pos(Config config, Bodies b, double dt,
                   double *tnow, double *tvel) nogil
 
+    void tidal_start(Config config, Bodies b, Placeholders p,
+                     double dt, double *tnow, double *tpos, double *tvel) nogil
+
 cdef extern from "src/helpers.h":
     void indexx(int n, double *arrin, int *indx) nogil
 
@@ -183,7 +186,7 @@ def scf():
     config.n_bodies = N
     config.n_recenter = 100
     config.n_snapshot = 10
-    config.n_tidal = 100
+    config.n_tidal = 100 # should be >= 1
     config.selfgravitating = 1
     config.nmax = nmax
     config.lmax = lmax
@@ -238,13 +241,17 @@ def scf():
 
     frame(config, 0, b, &pot_idx[0], &xyz_frame[0], &vxyz_frame[0])
 
-    for i in range(4):
-        print("xyz", x[i], y[i], z[i])
-        print("vxyz", vx[i], vy[i], vz[i])
-        print("axyz", ax[i], ay[i], az[i])
-        print()
+    # for i in range(4):
+    #     print("xyz", x[i], y[i], z[i])
+    #     print("vxyz", vx[i], vy[i], vz[i])
+    #     print("axyz", ax[i], ay[i], az[i])
+    #     print()
 
     # initialize velocities (take a half step in time)
     step_vel(config, b, 0.5*dt, &tnow, &tvel)
 
+    print(tnow, tvel, dt)
+
+    # slowly turn on tidal field
+    tidal_start(config, b, p, dt, &tnow, &tpos, &tvel);
 

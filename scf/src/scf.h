@@ -60,3 +60,6 @@ extern void frame(Config config, int iter, Bodies b,
 
 extern void step_vel(Config config, Bodies b, double dt,
                      double *tnow, double *tvel);
+
+extern void tidal_start(Config config, Bodies b, Placeholders p,
+                        double dt, double *tnow, double *tpos, double *tvel);
