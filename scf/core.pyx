@@ -78,11 +78,19 @@ cdef extern from "src/scf.h":
         int *ibound
         double *tub
 
-    void acc_pot(Config config, Bodies b, Placeholders p,
-                 double extern_strength, int *firstc, double *xyz_frame) nogil
+    ctypedef struct COMFrame:
+        double x
+        double y
+        double z
+        double vx
+        double vy
+        double vz
+        int *pot_idx
 
-    void frame(int iter, Config config, Bodies b,
-               int *pot_idx, double *xyz_frame, double *vxyz_frame) nogil
+    void acc_pot(Config config, Bodies b, Placeholders p, COMFrame f,
+                 double extern_strength, int *firstc) nogil
+
+    void frame(int iter, Config config, Bodies b, COMFrame f) nogil
 
     void step_vel(Config config, Bodies b, double dt,
                   double *tnow, double *tvel) nogil
@@ -90,13 +98,11 @@ cdef extern from "src/scf.h":
     void step_pos(Config config, Bodies b, double dt,
                   double *tnow, double *tvel) nogil
 
-    void tidal_start(Config config, Bodies b, Placeholders p,
-                     double *tnow, double *tpos, double *tvel,
-                     int *pot_idx, double *xyz_frame, double *vxyz_frame) nogil
+    void tidal_start(Config config, Bodies b, Placeholders p, COMFrame f,
+                     double *tnow, double *tpos, double *tvel) nogil
 
-    void step_system(int iter, Config config, Bodies b, Placeholders p,
-                     double *tnow, double *tpos, double *tvel,
-                     int *pot_idx, double *xyz_frame, double *vxyz_frame) nogil
+    void step_system(int iter, Config config, Bodies b, Placeholders p, COMFrame f,
+                     double *tnow, double *tpos, double *tvel) nogil
 
 cdef extern from "src/helpers.h":
     void indexx(int n, double *arrin, int *indx) nogil
@@ -119,6 +125,7 @@ def scf():
         Config config
         Placeholders p
         Bodies b
+        COMFrame f
 
         # Read in the phase-space positions of the N bodies
         double[::1] x = np.ascontiguousarray(bodies['x'][:N])
@@ -159,10 +166,6 @@ def scf():
 
         int i,j
 
-        # the position and velocity of the progenitor
-        double[::1] xyz_frame = np.array([15.,0,0]) # kpc
-        double[::1] vxyz_frame = np.array([0,100.,0]) # km/s whaaat?
-
         # index array for sorting particles on potential value
         int[::1] pot_idx = np.zeros(N, dtype=np.int32)
 
@@ -199,6 +202,15 @@ def scf():
     config.mu = mu
     config.tu = tu
     config.vu = vu
+
+    # the position and velocity of the progenitor
+    f.x = 15.
+    f.y = 0.
+    f.z = 0.
+    f.vx = 0.
+    f.vy = 100. # WTF - why km/s???
+    f.vz = 0.
+    f.pot_idx = &pot_idx[0]
 
     # The N bodies
     b.x = &x[0]
@@ -246,19 +258,23 @@ def scf():
     tpos = tnow
     tvel = tnow
 
-    for i in range(3):
-        xyz_frame[i] = xyz_frame[i] / ru
-        vxyz_frame[i] = vxyz_frame[i] / vu
+    # TODO: why??
+    f.x = f.x / ru
+    f.y = f.y / ru
+    f.z = f.z / ru
+    f.vx = f.vx / vu
+    f.vy = f.vy / vu
+    f.vz = f.vz / vu
 
     for i in range(N):
         kin[i] = 0.5 * (vx[i]*vx[i] + vy[i]*vy[i] + vz[i]*vz[i]);
-        vx[i] = vx[i] + vxyz_frame[0]
-        vy[i] = vy[i] + vxyz_frame[1]
-        vz[i] = vz[i] + vxyz_frame[2]
+        vx[i] = vx[i] + f.vx
+        vy[i] = vy[i] + f.vy
+        vz[i] = vz[i] + f.vz
 
-    acc_pot(config, b, p, extern_strength, &firstc, &xyz_frame[0])
+    acc_pot(config, b, p, f, extern_strength, &firstc)
 
-    frame(0, config, b, &pot_idx[0], &xyz_frame[0], &vxyz_frame[0])
+    frame(0, config, b, f)
 
     # initialize velocities (take a half step in time)
     step_vel(config, b, 0.5*config.dt, &tnow, &tvel)
@@ -273,14 +289,12 @@ def scf():
 
     # slowly turn on tidal field
     # TODO: do tidal start in Cython?
-    tidal_start(config, b, p, &tnow, &tpos, &tvel,
-                &pot_idx[0], &xyz_frame[0], &vxyz_frame[0])
+    tidal_start(config, b, p, f, &tnow, &tpos, &tvel)
 
     j = 0
     for i in range(config.n_steps):
         PyErr_CheckSignals()
-        step_system(i, config, b, p, &tnow, &tpos, &tvel,
-                    &pot_idx[0], &xyz_frame[0], &vxyz_frame[0])
+        step_system(i, config, b, p, f, &tnow, &tpos, &tvel)
 
         if ((i+1) % config.n_snapshot) == 0 or i == 0:
             snap_filename = os.path.join(output_path, "SNAP{:04d}".format(j))
@@ -288,9 +302,9 @@ def scf():
             step_vel(config, b, 0.5*config.dt, &tnow, &tvel)
 
             arr = np.array([x,y,z,vx,vy,vz]).T
-            arr[:,0] += xyz_frame[0]
-            arr[:,1] += xyz_frame[1]
-            arr[:,2] += xyz_frame[2]
+            arr[:,0] += f.x
+            arr[:,1] += f.y
+            arr[:,2] += f.z
             np.savetxt(snap_filename, arr)
 
             step_vel(config, b, -0.5*config.dt, &tnow, &tvel)

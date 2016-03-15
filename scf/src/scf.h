@@ -54,21 +54,28 @@ typedef struct {
     double *tub;
 } Bodies;
 
-extern void accp_firstc(Config config, Placeholders p);
+typedef struct {
+    double x;
+    double y;
+    double z;
+    double vx;
+    double vy;
+    double vz;
+    int *pot_idx; // used for sorting particles on how bound they are
+} COMFrame; // Center-of-mass reference frame
 
-extern void acc_pot(Config config, Bodies b, Placeholders p,
-                    double extern_strength, int *firstc, double *xyz_frame);
+// extern void accp_firstc(Config config, Placeholders p);
 
-extern void frame(int iter, Config config, Bodies b,
-                  int *pot_idx, double *xyz_frame, double *vxyz_frame);
+// extern void acc_pot(Config config, Bodies b, Placeholders p, COMFrame f,
+//                     double extern_strength, int *firstc);
 
-extern void step_vel(Config config, Bodies b, double dt,
-                     double *tnow, double *tvel);
+// extern void frame(int iter, Config config, Bodies b, COMFrame f);
 
-extern void tidal_start(Config config, Bodies b, Placeholders p,
-                        double *tnow, double *tpos, double *tvel,
-                        int *pot_idx, double *xyz_frame, double *vxyz_frame);
+// extern void step_vel(Config config, Bodies b, double dt,
+//                      double *tnow, double *tvel);
 
-extern void step_system(int iter, Config config, Bodies b, Placeholders p,
-                        double *tnow, double *tpos, double *tvel,
-                        int *pot_idx, double *xyz_frame, double *vxyz_frame);
+// extern void tidal_start(Config config, Bodies b, Placeholders p, COMFrame f,
+//                         double *tnow, double *tpos, double *tvel);
+
+// extern void step_system(int iter, Config config, Bodies b, Placeholders p,
+//                         double *tnow, double *tpos, double *tvel);
