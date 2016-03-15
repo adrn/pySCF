@@ -7,6 +7,10 @@ typedef struct {
     int lmax;
     int zeroodd;
     int zeroeven;
+    double ru;
+    double mu;
+    double vu;
+    double tu;
 } Config;
 
 extern void accp_firstc(Config config,
@@ -28,7 +32,7 @@ extern void accp_LH(Config config, double *xyz, double *mass, int *ibound,
                     double *pot,
                     double *acc);
 
-extern void acc_pot(Config config, int selfgrav,
+extern void acc_pot(Config config, int selfgrav, double extern_strength,
                     double *xyz, double *mass, int *ibound,
                     double *sinsum, double *cossum,
                     double G, int *firstc,
@@ -40,4 +44,7 @@ extern void acc_pot(Config config, int selfgrav,
 
 extern void frame(Config config, int iter,
                   double *xyz, double *vxyz, double *mass, double *pot,
-                  int *pot_idx, double *xyz_frame);
+                  int *pot_idx, double *xyz_frame, double *vxyz_frame);
+
+extern void initvel(Config config, double *tnow, double *tvel, double dt,
+                    double *vxyz, double *acc);
