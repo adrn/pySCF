@@ -14,6 +14,7 @@ def get_extensions():
     cfg['sources'].append('scf/src/indexx.c')
     cfg['sources'].append('scf/src/helpers.c')
     cfg['sources'].append('scf/src/nrutil.c')
+    cfg['sources'].append('scf/src/leapfrog.c')
     cfg['libraries'] = ['gsl', 'gslcblas']
     cfg['extra_compile_args'] = ['--std=gnu99']
 
