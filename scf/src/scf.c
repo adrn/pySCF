@@ -365,10 +365,10 @@ void accp_external(Config config, Bodies b, double strength, double *xyz_frame) 
         b.ay[k] = b.ay[k] - strength*tsrad*yy;
         b.az[k] = b.az[k] - strength*tsrad*zz;
 
-        if (k == 0) {
-            // printf("%e\n", strength*tsrad*b.x[k]);
-            printf("DERP %e %e %e\n", rad, strength, tsrad);
-        }
+        // if (k == 0) {
+        //     // printf("%e\n", strength*tsrad*b.x[k]);
+        //     printf("DERP %e %e %e\n", rad, strength, tsrad);
+        // }
     }
 }
 
@@ -583,7 +583,7 @@ void tidal_start(Config config, Bodies b, Placeholders p,
         *tpos = 0.;
         *tnow = 0.;
 
-        printf("Tidal start: %d\n", n);
+        printf("Tidal start: %d\n", n+1);
     }
 
     // Synchronize the velocities with the positions
@@ -602,4 +602,18 @@ void tidal_start(Config config, Bodies b, Placeholders p,
     // }
     // exit(0);
 
+}
+
+void step_system(int iter, Config config, Bodies b, Placeholders p,
+                 double dt, double *tnow, double *tpos, double *tvel,
+                 int *pot_idx, double *xyz_frame, double *vxyz_frame) {
+
+    int not_firstc = 0;
+    double strength = 1.;
+
+    step_pos(config, b, dt, tnow, tpos);
+    frame(config, iter, b, pot_idx, xyz_frame, vxyz_frame);
+    acc_pot(config, strength, b, p, &not_firstc, xyz_frame);
+    step_vel(config, b, dt, tnow, tvel);
+    printf("Step: %d\n", iter+1);
 }

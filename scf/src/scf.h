@@ -1,4 +1,5 @@
 typedef struct {
+    int n_steps;
     int n_bodies;
     int n_recenter;
     int n_snapshot;
@@ -64,5 +65,9 @@ extern void step_vel(Config config, Bodies b, double dt,
                      double *tnow, double *tvel);
 
 extern void tidal_start(Config config, Bodies b, Placeholders p,
+                        double dt, double *tnow, double *tpos, double *tvel,
+                        int *pot_idx, double *xyz_frame, double *vxyz_frame);
+
+extern void step_system(int iter, Config config, Bodies b, Placeholders p,
                         double dt, double *tnow, double *tpos, double *tvel,
                         int *pot_idx, double *xyz_frame, double *vxyz_frame);

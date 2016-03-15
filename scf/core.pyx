@@ -10,18 +10,23 @@ from __future__ import division, print_function
 
 __author__ = "adrn <adrn@astro.columbia.edu>"
 
+# Standard library
+import os
+
 # Third-party
 import numpy as np
 cimport numpy as np
 np.import_array()
 import cython
 cimport cython
+from cpython.exc cimport PyErr_CheckSignals
 
 cdef extern from "math.h":
     double sqrt(double)
 
 cdef extern from "src/scf.h":
     ctypedef struct Config:
+        int n_steps
         int n_bodies
         int n_recenter
         int n_snapshot
@@ -87,6 +92,10 @@ cdef extern from "src/scf.h":
                      double dt, double *tnow, double *tpos, double *tvel,
                      int *pot_idx, double *xyz_frame, double *vxyz_frame) nogil
 
+    void step_system(int iter, Config config, Bodies b, Placeholders p,
+                     double dt, double *tnow, double *tpos, double *tvel,
+                     int *pot_idx, double *xyz_frame, double *vxyz_frame) nogil
+
 cdef extern from "src/helpers.h":
     void indexx(int n, double *arrin, int *indx) nogil
 
@@ -97,12 +106,15 @@ def scf():
     bodies_filename = '/Users/adrian/projects/scf/fortran/SCFBI'
     bodies = np.genfromtxt(bodies_filename, dtype=None, names=names,
                            skip_header=skip)
+    output_path = '/Users/adrian/projects/scf/test/'
+    if not os.path.exists(output_path):
+        os.mkdir(output_path)
 
     cdef:
-        int N = 128
-        # int N = 10000
+        # int N = 128
+        int N = 10000
         double t0 = 0.
-        double dt = 0.02 # to compare to SCF
+        double dt = 1. # to compare to SCF
         int firstc = 1
         Config config
         Placeholders p
@@ -145,11 +157,11 @@ def scf():
         int lmin = 0
         int lskip = 0
 
-        int i
+        int i,j
 
         # the position and velocity of the progenitor
         double[::1] xyz_frame = np.array([15.,0,0]) # kpc
-        double[::1] vxyz_frame = np.array([0,200.,0]) # km/s whaaat?
+        double[::1] vxyz_frame = np.array([0,100.,0]) # km/s whaaat?
 
         # index array for sorting particles on potential value
         int[::1] pot_idx = np.zeros(N, dtype=np.int32)
@@ -171,8 +183,9 @@ def scf():
 
     # Configuration stuff
     config.n_bodies = N
+    config.n_steps = 4096
     config.n_recenter = 100
-    config.n_snapshot = 10
+    config.n_snapshot = 512
     config.n_tidal = 128 # should be >= 1, matched to fortran
     config.selfgravitating = 1
     config.nmax = nmax
@@ -259,6 +272,38 @@ def scf():
     print(tnow, tvel, dt)
 
     # slowly turn on tidal field
+    # TODO: do tidal start in Cython?
     tidal_start(config, b, p, dt, &tnow, &tpos, &tvel,
                 &pot_idx[0], &xyz_frame[0], &vxyz_frame[0])
+
+    j = 0
+    for i in range(config.n_steps):
+        PyErr_CheckSignals()
+        step_system(i, config, b, p, dt, &tnow, &tpos, &tvel,
+                    &pot_idx[0], &xyz_frame[0], &vxyz_frame[0])
+
+        if ((i+1) % config.n_snapshot) == 0 or i == 0:
+            print(tnow, tpos, tvel)
+            snap_filename = os.path.join(output_path, "SNAP{:04d}".format(j))
+
+            step_vel(config, b, 0.5*dt, &tnow, &tvel)
+            print(tnow, tpos, tvel)
+            arr = np.array([x,y,z,vx,vy,vz]).T
+            arr[:,0] += xyz_frame[0]
+            arr[:,1] += xyz_frame[1]
+            arr[:,2] += xyz_frame[2]
+            np.savetxt(snap_filename, arr)
+
+            step_vel(config, b, -0.5*dt, &tnow, &tvel)
+            print(tnow, tpos, tvel)
+
+            j += 1
+
+    # for i in range(1):
+    #     print("xyz", x[i], y[i], z[i])
+    #     print("vxyz", vx[i], vy[i], vz[i])
+    #     print("axyz", ax[i], ay[i], az[i])
+    #     print()
+    # return
+
 
