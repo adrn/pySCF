@@ -99,8 +99,8 @@ def scf():
                            skip_header=skip)
 
     cdef:
-        int N = 128
-        # int N = 10000
+        # int N = 128
+        int N = 10000
         double t0 = 0.
         double dt = 0.1
         int firstc = 1
