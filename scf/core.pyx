@@ -78,10 +78,10 @@ cdef extern from "src/scf.h":
         int *ibound
         double *tub
 
-    void acc_pot(Config config, double extern_strength,
-                 Bodies b, Placeholders p, int *firstc, double *xyz_frame) nogil
+    void acc_pot(Config config, Bodies b, Placeholders p,
+                 double extern_strength, int *firstc, double *xyz_frame) nogil
 
-    void frame(Config config, int iter, Bodies b,
+    void frame(int iter, Config config, Bodies b,
                int *pot_idx, double *xyz_frame, double *vxyz_frame) nogil
 
     void step_vel(Config config, Bodies b, double dt,
@@ -256,9 +256,9 @@ def scf():
         vy[i] = vy[i] + vxyz_frame[1]
         vz[i] = vz[i] + vxyz_frame[2]
 
-    acc_pot(config, extern_strength, b, p, &firstc, &xyz_frame[0])
+    acc_pot(config, b, p, extern_strength, &firstc, &xyz_frame[0])
 
-    frame(config, 0, b, &pot_idx[0], &xyz_frame[0], &vxyz_frame[0])
+    frame(0, config, b, &pot_idx[0], &xyz_frame[0], &vxyz_frame[0])
 
     # initialize velocities (take a half step in time)
     step_vel(config, b, 0.5*config.dt, &tnow, &tvel)

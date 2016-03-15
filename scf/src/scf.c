@@ -387,8 +387,8 @@ void accp_external(Config config, Bodies b, double strength, double *xyz_frame) 
     }
 }
 
-void acc_pot(Config config, double extern_strength,
-             Bodies b, Placeholders p, int *firstc, double *xyz_frame) {
+void acc_pot(Config config, Bodies b, Placeholders p,
+             double extern_strength, int *firstc, double *xyz_frame) {
     int j,k;
 
     if (config.selfgravitating) {
@@ -406,7 +406,7 @@ void acc_pot(Config config, double extern_strength,
 
 }
 
-void frame(Config config, int iter, Bodies b,
+void frame(int iter, Config config, Bodies b,
            int *pot_idx, double *xyz_frame, double *vxyz_frame) {
     /*
     Shift the phase-space coordinates to be centered on the minimum potential.
@@ -480,7 +480,7 @@ void frame(Config config, int iter, Bodies b,
     }
 }
 
-void check_progenitor(Config config, int iter, Bodies b, Placeholders p,
+void check_progenitor(int iter, Config config, Bodies b, Placeholders p,
                       double *tnow, double *xyz_frame, double *vxyz_frame) {
     double m_prog, m_safe;
     double vx_rel, vy_rel, vz_rel;
@@ -518,7 +518,7 @@ void check_progenitor(Config config, int iter, Bodies b, Placeholders p,
         }
 
         // Find new accelerations with unbound stuff removed
-        acc_pot(config, 1., b, p, &not_firstc, xyz_frame);
+        acc_pot(config, b, p, 1., &not_firstc, xyz_frame);
     }
 
     // if the loop above didn't break, progenitor is dissolved?
@@ -588,7 +588,7 @@ void tidal_start(Config config, Bodies b, Placeholders p,
         strength = (-2.*t_tidal + 3.)*t_tidal*t_tidal;
 
         // Find new accelerations
-        acc_pot(config, strength, b, p, &not_firstc, xyz_frame);
+        acc_pot(config, b, p, strength, &not_firstc, xyz_frame);
 
         // Advance velocity by one step
         step_vel(config, b, config.dt, tnow, tvel);
@@ -603,8 +603,8 @@ void tidal_start(Config config, Bodies b, Placeholders p,
 
     // Synchronize the velocities with the positions
     step_vel(config, b, -0.5*config.dt, tnow, tvel);
-    frame(config, 0, b, pot_idx, xyz_frame, vxyz_frame);
-    check_progenitor(config, 0, b, p, tnow, xyz_frame, vxyz_frame);
+    frame(0, config, b, pot_idx, xyz_frame, vxyz_frame);
+    check_progenitor(0, config, b, p, tnow, xyz_frame, vxyz_frame);
     // TODO: outlog?
 
     // Reset the velocities to being 1/2 step ahead of the positions
@@ -627,8 +627,8 @@ void step_system(int iter, Config config, Bodies b, Placeholders p,
     double strength = 1.;
 
     step_pos(config, b, config.dt, tnow, tpos);
-    frame(config, iter, b, pot_idx, xyz_frame, vxyz_frame);
-    acc_pot(config, strength, b, p, &not_firstc, xyz_frame);
+    frame(iter, config, b, pot_idx, xyz_frame, vxyz_frame);
+    acc_pot(config, b, p, strength, &not_firstc, xyz_frame);
     step_vel(config, b, config.dt, tnow, tvel);
     printf("Step: %d\n", iter+1);
 }

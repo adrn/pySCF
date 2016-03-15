@@ -56,11 +56,10 @@ typedef struct {
 
 extern void accp_firstc(Config config, Placeholders p);
 
-extern void acc_pot(Config config, double extern_strength,
-                    Bodies b, Placeholders p, int *firstc,
-                    double *xyz_frame);
+extern void acc_pot(Config config, Bodies b, Placeholders p,
+                    double extern_strength, int *firstc, double *xyz_frame);
 
-extern void frame(Config config, int iter, Bodies b,
+extern void frame(int iter, Config config, Bodies b,
                   int *pot_idx, double *xyz_frame, double *vxyz_frame);
 
 extern void step_vel(Config config, Bodies b, double dt,
