@@ -456,32 +456,57 @@ void frame(Config config, int iter, Bodies b,
     }
 }
 
-void step_vel(Config config, Bodies b, double dt,
-             double *tnow, double *tvel) {
-    int k;
-    for (k=0; k<config.n_bodies; k++) {
-        b.vx[k] = b.vx[k] + dt*b.ax[k];
-        b.vy[k] = b.vy[k] + dt*b.ay[k];
-        b.vz[k] = b.vz[k] + dt*b.az[k];
-    }
-    *tvel = *tvel + dt;
-    *tnow = *tvel;
-}
+void check_progenitor(Config config, int iter, Bodies b, Placeholders p,
+                      double *tnow, double *vxyz_frame) {
+    double m_prog, m_safe;
+    double vx_rel, vy_rel, vz_rel;
+    int k,n;
+    int N_MASS_ITER = 30; // TODO: set in config?
+    int not_firstc = 0;
+    int broke = 0;
 
-void step_pos(Config config, Bodies b, double dt,
-              double *tnow, double *tpos) {
-    int k;
     for (k=0; k<config.n_bodies; k++) {
-        b.x[k] = b.x[k] + dt*b.vx[k];
-        b.y[k] = b.y[k] + dt*b.vy[k];
-        b.z[k] = b.z[k] + dt*b.vz[k];
+        vx_rel = b.vx[k] - vxyz_frame[0];
+        vy_rel = b.vy[k] - vxyz_frame[1];
+        vz_rel = b.vz[k] - vxyz_frame[2];
+        b.kin[k] = 0.5*(vx_rel*vx_rel + vy_rel*vy_rel + vz_rel*vz_rel);
     }
-    *tpos = *tpos + dt;
-    *tnow = *tpos;
+
+    // iteratively shave off unbound particles to find prog. mass
+    for (n=0; n<N_MASS_ITER; n++) {
+        m_safe = m_prog;
+        m_prog = 0.;
+
+        for (k=0; k<config.n_bodies; k++) {
+            if (b.kin[k] > abs(b.pot[k])) {
+                b.ibound[k] = 0;
+                if (b.tub[k] == 0) b.tub[k] = *tnow;
+            } else {
+                m_prog = m_prog + b.mass[k];
+            }
+        }
+
+        if (m_safe <= m_prog) {
+            broke = 1;
+            break;
+        }
+
+        // Find new accelerations with unbound stuff removed
+        acc_pot(config, 1., b, p, &not_firstc);
+    }
+
+    // if the loop above didn't break, progenitor is dissolved?
+    if (broke == 0) m_prog = 0.;
+
+    printf("Found progenitor mass: %f\n", m_prog);
+
+    if (m_prog == 0) config.selfgravitating = 0;
+
 }
 
 void tidal_start(Config config, Bodies b, Placeholders p,
-                 double dt, double *tnow, double *tpos, double *tvel) {
+                 double dt, double *tnow, double *tpos, double *tvel,
+                 int *pot_idx, double *xyz_frame, double *vxyz_frame) {
     double v_cm[3], a_cm[3], mtot, t_tidal, strength;
     int i,k,n;
     int not_firstc = 0;
@@ -543,10 +568,13 @@ void tidal_start(Config config, Bodies b, Placeholders p,
         printf("Tidal start: %d\n", n);
     }
 
-    // TODO: corrvel(correct)
-    // TODO: frame(i)
-    // TODO: findrem(i)
-    // TODO: outlog
-    // TODO: corrvel(reset)
+    // Synchronize the velocities with the positions
+    step_vel(config, b, -0.5*dt, tnow, tvel);
+    frame(config, 0, b, pot_idx, xyz_frame, vxyz_frame);
+    check_progenitor(config, 0, b, p, tnow, vxyz_frame);
+    // TODO: outlog?
+
+    // Reset the velocities to being 1/2 step ahead of the positions
+    step_vel(config, b, -0.5*dt, tnow, tvel);
 
 }

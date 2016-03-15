@@ -66,6 +66,7 @@ cdef extern from "src/scf.h":
         double *ay
         double *az
         double *pot
+        double *kin
         double *mass
         int *ibound
         double *tub
@@ -83,7 +84,8 @@ cdef extern from "src/scf.h":
                   double *tnow, double *tvel) nogil
 
     void tidal_start(Config config, Bodies b, Placeholders p,
-                     double dt, double *tnow, double *tpos, double *tvel) nogil
+                     double dt, double *tnow, double *tpos, double *tvel,
+                     int *pot_idx, double *xyz_frame, double *vxyz_frame) nogil
 
 cdef extern from "src/helpers.h":
     void indexx(int n, double *arrin, int *indx) nogil
@@ -120,7 +122,8 @@ def scf():
         double[::1] ax = np.zeros(N)
         double[::1] ay = np.zeros(N)
         double[::1] az = np.zeros(N)
-        double[::1] pot = np.zeros(N)
+        double[::1] pot = np.zeros(N) # (internal) potential energy
+        double[::1] kin = np.zeros(N) # kinetic energy
 
         int nmax = 6
         int lmax = 4
@@ -178,6 +181,7 @@ def scf():
     b.ay = &ay[0]
     b.az = &az[0]
     b.pot = &pot[0]
+    b.kin = &kin[0]
     b.mass = &mass[0]
     b.ibound = &ibound[0]
     b.tub = &tub[0]
@@ -253,5 +257,6 @@ def scf():
     print(tnow, tvel, dt)
 
     # slowly turn on tidal field
-    tidal_start(config, b, p, dt, &tnow, &tpos, &tvel);
+    tidal_start(config, b, p, dt, &tnow, &tpos, &tvel,
+                &pot_idx[0], &xyz_frame[0], &vxyz_frame[0])
 
