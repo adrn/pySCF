@@ -342,34 +342,43 @@ void accp_LH(Config config, Bodies b, Placeholders p, int *firstc) {
 
 }
 
-void accp_external(Config config, Bodies b, double strength) {
+void accp_external(Config config, Bodies b, double strength, double *xyz_frame) {
 
     double rs = 10./config.ru;
     double vcirc2 = 220.*220./config.vu/config.vu;
     double GMs = 10.0*vcirc2/config.ru;
 
     int j, k;
-    double r2, rad, tsrad;
+    double xx, yy, zz, r2, rad, tsrad;
 
     for (k=0; k<config.n_bodies; k++) {
         // THIS IS JUST HERNQUIST
-        r2 = b.x[k]*b.x[k] + b.y[k]*b.y[k] + b.z[k]*b.z[k];
+        xx = b.x[k] + xyz_frame[0];
+        yy = b.y[k] + xyz_frame[1];
+        zz = b.z[k] + xyz_frame[2];
+
+        r2 = xx*xx + yy*yy + zz*zz;
         rad = sqrt(r2);
         tsrad = GMs/(rad+rs)/(rad+rs)/rad;
 
-        b.ax[k] = b.ax[k] - strength*tsrad*b.x[k];
-        b.ay[k] = b.ay[k] - strength*tsrad*b.y[k];
-        b.az[k] = b.az[k] - strength*tsrad*b.z[k];
+        b.ax[k] = b.ax[k] - strength*tsrad*xx;
+        b.ay[k] = b.ay[k] - strength*tsrad*yy;
+        b.az[k] = b.az[k] - strength*tsrad*zz;
+
+        if (k == 0) {
+            // printf("%e\n", strength*tsrad*b.x[k]);
+            printf("DERP %e %e %e\n", rad, strength, tsrad);
+        }
     }
 }
 
 void acc_pot(Config config, double extern_strength,
-             Bodies b, Placeholders p, int *firstc) {
+             Bodies b, Placeholders p, int *firstc, double *xyz_frame) {
     int j,k;
 
     if (config.selfgravitating) {
         accp_LH(config, b, p, firstc);
-        accp_external(config, b, extern_strength);
+        accp_external(config, b, extern_strength, xyz_frame);
     } else {
         for (k=0; k<config.n_bodies; k++) {
             b.ax[k] = 0.;
@@ -377,7 +386,7 @@ void acc_pot(Config config, double extern_strength,
             b.az[k] = 0.;
             b.pot[k] = 0.;
         }
-        accp_external(config, b, extern_strength);
+        accp_external(config, b, extern_strength, xyz_frame);
     }
 
 }
@@ -457,7 +466,7 @@ void frame(Config config, int iter, Bodies b,
 }
 
 void check_progenitor(Config config, int iter, Bodies b, Placeholders p,
-                      double *tnow, double *vxyz_frame) {
+                      double *tnow, double *xyz_frame, double *vxyz_frame) {
     double m_prog, m_safe;
     double vx_rel, vy_rel, vz_rel;
     int k,n;
@@ -478,7 +487,8 @@ void check_progenitor(Config config, int iter, Bodies b, Placeholders p,
         m_prog = 0.;
 
         for (k=0; k<config.n_bodies; k++) {
-            if (b.kin[k] > abs(b.pot[k])) {
+            if (b.kin[k] > fabs(b.pot[k])) {
+                printf("unbound %d\n", k+1);
                 b.ibound[k] = 0;
                 if (b.tub[k] == 0) b.tub[k] = *tnow;
             } else {
@@ -486,19 +496,20 @@ void check_progenitor(Config config, int iter, Bodies b, Placeholders p,
             }
         }
 
+        // printf("msafe prog %f %f\n", m_safe, m_prog);
         if (m_safe <= m_prog) {
             broke = 1;
             break;
         }
 
         // Find new accelerations with unbound stuff removed
-        acc_pot(config, 1., b, p, &not_firstc);
+        acc_pot(config, 1., b, p, &not_firstc, xyz_frame);
     }
 
     // if the loop above didn't break, progenitor is dissolved?
     if (broke == 0) m_prog = 0.;
 
-    printf("Found progenitor mass: %f\n", m_prog);
+    printf("Found progenitor mass (%d iter): %f\n", n, m_prog);
 
     if (m_prog == 0) config.selfgravitating = 0;
 
@@ -521,10 +532,9 @@ void tidal_start(Config config, Bodies b, Placeholders p,
             v_cm[i] = 0.;
             a_cm[i] = 0.;
         }
+        mtot = 0.;
 
         for (k=0; k<config.n_bodies; k++) {
-            mtot = mtot + b.mass[k];
-
             v_cm[0] = v_cm[0] + b.mass[k]*b.vx[k];
             v_cm[1] = v_cm[1] + b.mass[k]*b.vy[k];
             v_cm[2] = v_cm[2] + b.mass[k]*b.vz[k];
@@ -532,12 +542,16 @@ void tidal_start(Config config, Bodies b, Placeholders p,
             a_cm[0] = a_cm[0] + b.mass[k]*b.ax[k];
             a_cm[1] = a_cm[1] + b.mass[k]*b.ay[k];
             a_cm[2] = a_cm[2] + b.mass[k]*b.az[k];
+
+            mtot = mtot + b.mass[k];
         }
 
         for (i=0; i<3; i++) {
             v_cm[i] = v_cm[i]/mtot;
             a_cm[i] = a_cm[i]/mtot;
         }
+
+        // printf("%e %e %e\n", v_cm[0], v_cm[1], v_cm[2]);
 
         // Retard position and velocity by one step relative to center of mass??
         for (k=0; k<config.n_bodies; k++) {
@@ -549,13 +563,17 @@ void tidal_start(Config config, Bodies b, Placeholders p,
             b.vy[k] = b.vy[k] - a_cm[1]*dt;
             b.vz[k] = b.vz[k] - a_cm[2]*dt;
         }
+        // printf("\n");
+        // if (n == 2) {
+        //     exit(0);
+        // }
 
         // Increase tidal field
-        t_tidal = ((double)n) / ((double)config.n_tidal);
+        t_tidal = ((double)n + 1.) / ((double)config.n_tidal);
         strength = (-2.*t_tidal + 3.)*t_tidal*t_tidal;
 
         // Find new accelerations
-        acc_pot(config, strength, b, p, &not_firstc);
+        acc_pot(config, strength, b, p, &not_firstc, xyz_frame);
 
         // Advance velocity by one step
         step_vel(config, b, dt, tnow, tvel);
@@ -571,10 +589,17 @@ void tidal_start(Config config, Bodies b, Placeholders p,
     // Synchronize the velocities with the positions
     step_vel(config, b, -0.5*dt, tnow, tvel);
     frame(config, 0, b, pot_idx, xyz_frame, vxyz_frame);
-    check_progenitor(config, 0, b, p, tnow, vxyz_frame);
+    check_progenitor(config, 0, b, p, tnow, xyz_frame, vxyz_frame);
     // TODO: outlog?
 
     // Reset the velocities to being 1/2 step ahead of the positions
     step_vel(config, b, -0.5*dt, tnow, tvel);
+
+    // for (k=0; k<4; k++) {
+    //     printf("%d\n", k+1);
+    //     printf("xyz %e %e %e\n", b.x[k], b.y[k], b.z[k]);
+    //     printf("vxyz %e %e %e\n", b.vx[k], b.vy[k], b.vz[k]);
+    // }
+    // exit(0);
 
 }

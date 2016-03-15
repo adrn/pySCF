@@ -54,7 +54,8 @@ typedef struct {
 extern void accp_firstc(Config config, Placeholders p);
 
 extern void acc_pot(Config config, double extern_strength,
-                    Bodies b, Placeholders p, int *firstc);
+                    Bodies b, Placeholders p, int *firstc,
+                    double *xyz_frame);
 
 extern void frame(Config config, int iter, Bodies b,
                   int *pot_idx, double *xyz_frame, double *vxyz_frame);

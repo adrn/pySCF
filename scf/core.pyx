@@ -72,7 +72,7 @@ cdef extern from "src/scf.h":
         double *tub
 
     void acc_pot(Config config, double extern_strength,
-                 Bodies b, Placeholders p, int *firstc) nogil
+                 Bodies b, Placeholders p, int *firstc, double *xyz_frame) nogil
 
     void frame(Config config, int iter, Bodies b,
                int *pot_idx, double *xyz_frame, double *vxyz_frame) nogil
@@ -99,10 +99,10 @@ def scf():
                            skip_header=skip)
 
     cdef:
-        # int N = 128
-        int N = 10000
+        int N = 128
+        # int N = 10000
         double t0 = 0.
-        double dt = 0.1
+        double dt = 0.02 # to compare to SCF
         int firstc = 1
         Config config
         Placeholders p
@@ -115,8 +115,7 @@ def scf():
         double[::1] vx = np.ascontiguousarray(bodies['vx'][:N])
         double[::1] vy = np.ascontiguousarray(bodies['vy'][:N])
         double[::1] vz = np.ascontiguousarray(bodies['vz'][:N])
-        # double[::1] mass = np.ones(N) / N
-        double[::1] mass = np.ones(N) * 1E-4 # HACK: so I can compare to SCF
+        double[::1] mass = np.ones(N) / N
         int[::1] ibound = np.ones(N, dtype=np.int32)
         double[::1] tub = np.zeros(N)
         double[::1] ax = np.zeros(N)
@@ -170,6 +169,22 @@ def scf():
 
         double tnow, tpos, tvel
 
+    # Configuration stuff
+    config.n_bodies = N
+    config.n_recenter = 100
+    config.n_snapshot = 10
+    config.n_tidal = 128 # should be >= 1, matched to fortran
+    config.selfgravitating = 1
+    config.nmax = nmax
+    config.lmax = lmax
+    config.zeroodd = 0
+    config.zeroeven = 0
+    config.G = 1.
+    config.ru = ru
+    config.mu = mu
+    config.tu = tu
+    config.vu = vu
+
     # The N bodies
     b.x = &x[0]
     b.y = &y[0]
@@ -185,22 +200,6 @@ def scf():
     b.mass = &mass[0]
     b.ibound = &ibound[0]
     b.tub = &tub[0]
-
-    # Configuration stuff
-    config.n_bodies = N
-    config.n_recenter = 100
-    config.n_snapshot = 10
-    config.n_tidal = 100 # should be >= 1
-    config.selfgravitating = 1
-    config.nmax = nmax
-    config.lmax = lmax
-    config.zeroodd = 0
-    config.zeroeven = 0
-    config.G = 1.
-    config.ru = ru
-    config.mu = mu
-    config.tu = tu
-    config.vu = vu
 
     # Pointers to a bunch of placeholder arrays
     p.lmin = &lmin
@@ -232,27 +231,30 @@ def scf():
     tpos = tnow
     tvel = tnow
 
-    acc_pot(config, extern_strength, b, p, &firstc)
-
     for i in range(3):
         xyz_frame[i] = xyz_frame[i] / ru
         vxyz_frame[i] = vxyz_frame[i] / vu
 
     for i in range(N):
+        kin[i] = 0.5 * (vx[i]*vx[i] + vy[i]*vy[i] + vz[i]*vz[i]);
         vx[i] = vx[i] + vxyz_frame[0]
         vy[i] = vy[i] + vxyz_frame[1]
         vz[i] = vz[i] + vxyz_frame[2]
 
-    frame(config, 0, b, &pot_idx[0], &xyz_frame[0], &vxyz_frame[0])
+    acc_pot(config, extern_strength, b, p, &firstc, &xyz_frame[0])
 
-    # for i in range(4):
-    #     print("xyz", x[i], y[i], z[i])
-    #     print("vxyz", vx[i], vy[i], vz[i])
-    #     print("axyz", ax[i], ay[i], az[i])
-    #     print()
+    frame(config, 0, b, &pot_idx[0], &xyz_frame[0], &vxyz_frame[0])
 
     # initialize velocities (take a half step in time)
     step_vel(config, b, 0.5*dt, &tnow, &tvel)
+
+    # for i in range(4):
+    #     print("xyz", x[i], y[i], z[i])
+    #     # print("pot kin", pot[i], kin[i])
+    #     print("vxyz", vx[i], vy[i], vz[i])
+    #     print("axyz", ax[i], ay[i], az[i])
+    #     print()
+    # return
 
     print(tnow, tvel, dt)
 
