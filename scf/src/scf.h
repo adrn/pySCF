@@ -34,20 +34,29 @@ typedef struct {
     int *lskip;
 } Placeholders;
 
+typedef struct {
+    double *x;
+    double *y;
+    double *z;
+    double *vx;
+    double *vy;
+    double *vz;
+    double *ax;
+    double *ay;
+    double *az;
+    double *pot;
+    double *mass;
+    int *ibound;
+    double *tub;
+} Bodies;
+
 extern void accp_firstc(Config config, Placeholders p);
 
-extern void accp_LH(Config config, double *xyz, double *mass, int *ibound,
-                    Placeholders p, int *firstc,
-                    double *pot, double *acc);
-
 extern void acc_pot(Config config, double extern_strength,
-                    double *xyz, double *mass, int *ibound,
-                    Placeholders p, int *firstc,
-                    double *pot, double *acc);
+                    Bodies b, Placeholders p, int *firstc);
 
-extern void frame(Config config, int iter,
-                  double *xyz, double *vxyz, double *mass, double *pot,
+extern void frame(Config config, int iter, Bodies b,
                   int *pot_idx, double *xyz_frame, double *vxyz_frame);
 
-extern void initvel(Config config, double *tnow, double *tvel, double dt,
-                    double *vxyz, double *acc);
+extern void step_vel(Config config, Bodies b, double dt,
+                     double *tnow, double *tvel);

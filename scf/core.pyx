@@ -55,17 +55,32 @@ cdef extern from "src/scf.h":
         int *lmin
         int *lskip
 
-    void acc_pot(Config config, double extern_strength,
-                 double *xyz, double *mass, int *ibound,
-                 Placeholders p, int *firstc,
-                 double *pot, double *acc) nogil
+    ctypedef struct Bodies:
+        double *x
+        double *y
+        double *z
+        double *vx
+        double *vy
+        double *vz
+        double *ax
+        double *ay
+        double *az
+        double *pot
+        double *mass
+        int *ibound
+        double *tub
 
-    void frame(Config config, int iter,
-               double *xyz, double *vxyz, double *mass, double *pot,
+    void acc_pot(Config config, double extern_strength,
+                 Bodies b, Placeholders p, int *firstc) nogil
+
+    void frame(Config config, int iter, Bodies b,
                int *pot_idx, double *xyz_frame, double *vxyz_frame) nogil
 
-    void initvel(Config config, double *tnow, double *tvel, double dt,
-                 double *vxyz, double *acc) nogil
+    void step_vel(Config config, Bodies b, double dt,
+                  double *tnow, double *tvel) nogil
+
+    void step_pos(Config config, Bodies b, double dt,
+                  double *tnow, double *tvel) nogil
 
 cdef extern from "src/helpers.h":
     void indexx(int n, double *arrin, int *indx) nogil
@@ -86,13 +101,23 @@ def scf():
         int firstc = 1
         Config config
         Placeholders p
+        Bodies b
 
-        # turn these into (n_bodies,3) arrays
-        double[:,::1] xyz = np.ascontiguousarray(np.vstack([bodies[n] for n in ['x','y','z']]).T[:N])
-        double[:,::1] vxyz = np.ascontiguousarray(np.vstack([bodies[n] for n in ['vx','vy','vz']]).T[:N])
+        # Read in the phase-space positions of the N bodies
+        double[::1] x = np.ascontiguousarray(bodies['x'][:N])
+        double[::1] y = np.ascontiguousarray(bodies['y'][:N])
+        double[::1] z = np.ascontiguousarray(bodies['z'][:N])
+        double[::1] vx = np.ascontiguousarray(bodies['vx'][:N])
+        double[::1] vy = np.ascontiguousarray(bodies['vy'][:N])
+        double[::1] vz = np.ascontiguousarray(bodies['vz'][:N])
         # double[::1] mass = np.ones(N) / N
         double[::1] mass = np.ones(N) * 1E-4 # HACK: so I can compare to SCF
         int[::1] ibound = np.ones(N, dtype=np.int32)
+        double[::1] tub = np.zeros(N)
+        double[::1] ax = np.zeros(N)
+        double[::1] ay = np.zeros(N)
+        double[::1] az = np.zeros(N)
+        double[::1] pot = np.zeros(N)
 
         int nmax = 6
         int lmax = 4
@@ -114,9 +139,6 @@ def scf():
         double[::1] c3 = np.zeros(nmax+1)
         int lmin = 0
         int lskip = 0
-
-        double[:,::1] acc = np.zeros((N,3))
-        double[::1] pot = np.zeros(N)
 
         int i
 
@@ -141,6 +163,21 @@ def scf():
         double extern_strength
 
         double tnow, tpos, tvel
+
+    # The N bodies
+    b.x = &x[0]
+    b.y = &y[0]
+    b.z = &z[0]
+    b.vx = &vx[0]
+    b.vy = &vy[0]
+    b.vz = &vz[0]
+    b.ax = &ax[0]
+    b.ay = &ay[0]
+    b.az = &az[0]
+    b.pot = &pot[0]
+    b.mass = &mass[0]
+    b.ibound = &ibound[0]
+    b.tub = &tub[0]
 
     # Configuration stuff
     config.n_bodies = N
@@ -188,32 +225,26 @@ def scf():
     tpos = tnow
     tvel = tnow
 
-    acc_pot(config, extern_strength,
-            &xyz[0,0], &mass[0], &ibound[0],
-            p, &firstc,
-            &pot[0], &acc[0,0])
+    acc_pot(config, extern_strength, b, p, &firstc)
 
     for i in range(3):
         xyz_frame[i] = xyz_frame[i] / ru
         vxyz_frame[i] = vxyz_frame[i] / vu
 
     for i in range(N):
-        vxyz[i,0] = vxyz[i,0] + vxyz_frame[0]
-        vxyz[i,1] = vxyz[i,1] + vxyz_frame[1]
-        vxyz[i,2] = vxyz[i,2] + vxyz_frame[2]
+        vx[i] = vx[i] + vxyz_frame[0]
+        vy[i] = vy[i] + vxyz_frame[1]
+        vz[i] = vz[i] + vxyz_frame[2]
 
-    frame(config, 0, &xyz[0,0], &vxyz[0,0], &mass[0], &pot[0],
-          &pot_idx[0], &xyz_frame[0], &vxyz_frame[0])
-
-    initvel(config, &tnow, &tvel, dt, &vxyz[0,0], &acc[0,0])
+    frame(config, 0, b, &pot_idx[0], &xyz_frame[0], &vxyz_frame[0])
 
     for i in range(4):
-        print("xyz", xyz[i,0], xyz[i,1], xyz[i,2])
-        print("vxyz", vxyz[i,0], vxyz[i,1], vxyz[i,2])
-        print("axyz", acc[i,0], acc[i,1], acc[i,2])
+        print("xyz", x[i], y[i], z[i])
+        print("vxyz", vx[i], vy[i], vz[i])
+        print("axyz", ax[i], ay[i], az[i])
         print()
 
-    # print(xyz_frame[0], xyz_frame[1], xyz_frame[2])
+    # initialize velocities (take a half step in time)
+    step_vel(config, b, 0.5*dt, &tnow, &tvel)
 
-    # initvel(...stuff) # TODO
-    # print(np.array(pot[:10]))
+

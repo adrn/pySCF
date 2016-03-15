@@ -66,9 +66,7 @@ void accp_firstc(Config config, Placeholders p) {
     }
 }
 
-void accp_LH(Config config, double *xyz, double *mass, int *ibound,
-             Placeholders p, int *firstc,
-             double *pot, double *acc) {
+void accp_LH(Config config, Bodies b, Placeholders p, int *firstc) {
     /*
     */
 
@@ -127,12 +125,10 @@ void accp_LH(Config config, double *xyz, double *mass, int *ibound,
     for (k=0; k<config.n_bodies; k++) {
         // printf("%d\n", k);
 
-        if (ibound[k] > 0) { // skip unbound particles
-            j = 3*k; // x,y,z in same 2D array
-
-            r = sqrt(xyz[j]*xyz[j] + xyz[j+1]*xyz[j+1] + xyz[j+2]*xyz[j+2]);
-            costh = xyz[j+2] / r;
-            phi = atan2(xyz[j+1], xyz[j+0]);
+        if (b.ibound[k] > 0) { // skip unbound particles
+            r = sqrt(b.x[k]*b.x[k] + b.y[k]*b.y[k] + b.z[k]*b.z[k]);
+            costh = b.z[k] / r;
+            phi = atan2(b.y[k], b.x[k]);
             xi = (r - 1.) / (r + 1.);
 
             // precompute all cos(m*phi), sin(m*phi)
@@ -190,7 +186,7 @@ void accp_LH(Config config, double *xyz, double *mass, int *ibound,
             //        plm[getIndex2D(1,3,lmax+1)], plm[getIndex2D(3,1,lmax+1)], plm[getIndex2D(4,4,lmax+1)]);
 
             for (l=(*(p.lmin)); l<=lmax; l=l+(*(p.lskip))) {
-                temp5 = pow(r,l) / pow(1.+r,2*l+1) * mass[k];
+                temp5 = pow(r,l) / pow(1.+r,2*l+1) * b.mass[k];
                 // printf("temp5 %f %f %d %f\n", temp5, r, l, mass[k]);
 
                 for (m=0; m<=l; m++) {
@@ -227,11 +223,9 @@ void accp_LH(Config config, double *xyz, double *mass, int *ibound,
 
     // This loop computes the acceleration and potential at each particle given the BFE coeffs
     for (k=0; k<config.n_bodies; k++) {
-        j = 3*k; // x,y,z in same 2D array
-
-        r = sqrt(xyz[j]*xyz[j] + xyz[j+1]*xyz[j+1] + xyz[j+2]*xyz[j+2]);
-        costh = xyz[j+2] / r;
-        phi = atan2(xyz[j+1], xyz[j+0]);
+        r = sqrt(b.x[k]*b.x[k] + b.y[k]*b.y[k] + b.z[k]*b.z[k]);
+        costh = b.z[k] / r;
+        phi = atan2(b.y[k], b.x[k]);
         xi = (r - 1.) / (r + 1.);
 
         // precompute all cos(m*phi), sin(m*phi)
@@ -241,7 +235,7 @@ void accp_LH(Config config, double *xyz, double *mass, int *ibound,
         }
 
         // Zero out potential and accelerations
-        pot[k] = 0.;
+        b.pot[k] = 0.;
         ar = 0.;
         ath = 0.;
         aphi = 0.;
@@ -327,7 +321,7 @@ void accp_LH(Config config, double *xyz, double *mass, int *ibound,
             }
 
             phinltil = pow(r,l) / pow(1.+r, 2*l+1);
-            pot[k] = pot[k] + temp3*phinltil;
+            b.pot[k] = b.pot[k] + temp3*phinltil;
             ar = ar + phinltil*(-temp3*(l/r-(2.*l+1.)/(1.+r)) + temp4*4.*(2.*l+1.5)/pow(1.+r,2));
             ath = ath + temp5*phinltil;
             aphi = aphi + temp6*phinltil;
@@ -340,16 +334,15 @@ void accp_LH(Config config, double *xyz, double *mass, int *ibound,
         ath = -sinth*ath/r;
         aphi = aphi/(r*sinth);
 
-        acc[j+0] = config.G*(sinth*cosp*ar + costh*cosp*ath - sinp*aphi);
-        acc[j+1] = config.G*(sinth*sinp*ar + costh*sinp*ath + cosp*aphi);
-        acc[j+2] = config.G*(costh*ar - sinth*ath);
-        pot[k] = pot[k]*config.G;
+        b.ax[k] = config.G*(sinth*cosp*ar + costh*cosp*ath - sinp*aphi);
+        b.ay[k] = config.G*(sinth*sinp*ar + costh*sinp*ath + cosp*aphi);
+        b.az[k] = config.G*(costh*ar - sinth*ath);
+        b.pot[k] = b.pot[k]*config.G;
     }
 
 }
 
-void accp_external(Config config, double *xyz,
-                   double *pot, double *acc, double strength) {
+void accp_external(Config config, Bodies b, double strength) {
 
     double rs = 10./config.ru;
     double vcirc2 = 220.*220./config.vu/config.vu;
@@ -360,41 +353,36 @@ void accp_external(Config config, double *xyz,
 
     for (k=0; k<config.n_bodies; k++) {
         // THIS IS JUST HERNQUIST
-        j = 3*k;
-        r2 = xyz[j]*xyz[j] + xyz[j+1]*xyz[j+1] + xyz[j+2]*xyz[j+2];
-        rad = sqrt(rad);
+        r2 = b.x[k]*b.x[k] + b.y[k]*b.y[k] + b.z[k]*b.z[k];
+        rad = sqrt(r2);
         tsrad = GMs/(rad+rs)/(rad+rs)/rad;
 
-        acc[j]   = acc[j]   - strength*tsrad*xyz[j];
-        acc[j+1] = acc[j+1] - strength*tsrad*xyz[j+1];
-        acc[j+2] = acc[j+2] - strength*tsrad*xyz[j+2];
+        b.ax[k] = b.ax[k] - strength*tsrad*b.x[k];
+        b.ay[k] = b.ay[k] - strength*tsrad*b.y[k];
+        b.az[k] = b.az[k] - strength*tsrad*b.z[k];
     }
 }
 
 void acc_pot(Config config, double extern_strength,
-             double *xyz, double *mass, int *ibound,
-             Placeholders p, int *firstc,
-             double *pot, double *acc) {
+             Bodies b, Placeholders p, int *firstc) {
     int j,k;
 
     if (config.selfgravitating) {
-        accp_LH(config, xyz, mass, ibound, p, firstc, pot, acc);
-        accp_external(config, xyz, pot, acc, extern_strength);
+        accp_LH(config, b, p, firstc);
+        accp_external(config, b, extern_strength);
     } else {
         for (k=0; k<config.n_bodies; k++) {
-            j = 3*k;
-            acc[j+0] = 0.;
-            acc[j+1] = 0.;
-            acc[j+2] = 0.;
-            pot[k] = 0.;
+            b.ax[k] = 0.;
+            b.ay[k] = 0.;
+            b.az[k] = 0.;
+            b.pot[k] = 0.;
         }
-        accp_external(config, xyz, pot, acc, extern_strength);
+        accp_external(config, b, extern_strength);
     }
 
 }
 
-void frame(Config config, int iter,
-           double *xyz, double *vxyz, double *mass, double *pot,
+void frame(Config config, int iter, Bodies b,
            int *pot_idx, double *xyz_frame, double *vxyz_frame) {
     /*
     Shift the phase-space coordinates to be centered on the minimum potential.
@@ -425,16 +413,15 @@ void frame(Config config, int iter,
     xyz_min[2] = 0.;
 
     if ((iter == 0) || ((iter % config.n_recenter) == 0)) {
-        indexx(config.n_bodies, pot, pot_idx);
+        indexx(config.n_bodies, b.pot, pot_idx);
     }
 
     for (i=0; i<nend; i++) {
-        j = pot_idx[i];
-        k = getIndex2D(j,0,3);
-        xyz_min[0] = xyz_min[0] + mass[j]*xyz[k];
-        xyz_min[1] = xyz_min[1] + mass[j]*xyz[k+1];
-        xyz_min[2] = xyz_min[2] + mass[j]*xyz[k+2];
-        mred = mred + mass[j];
+        k = pot_idx[i];
+        xyz_min[0] = xyz_min[0] + b.mass[k]*b.x[k];
+        xyz_min[1] = xyz_min[1] + b.mass[k]*b.y[k];
+        xyz_min[2] = xyz_min[2] + b.mass[k]*b.z[k];
+        mred = mred + b.mass[k];
     }
 
     xyz_min[0] = xyz_min[0] / mred;
@@ -446,11 +433,10 @@ void frame(Config config, int iter,
     xyz_frame[1] = xyz_frame[1] + xyz_min[1];
     xyz_frame[2] = xyz_frame[2] + xyz_min[2];
 
-    for (i=0; i<config.n_bodies; i++) {
-        k = getIndex2D(i,0,3);
-        xyz[k] = xyz[k] - xyz_min[0];
-        xyz[k+1] = xyz[k+1] - xyz_min[1];
-        xyz[k+2] = xyz[k+2] - xyz_min[2];
+    for (k=0; k<config.n_bodies; k++) {
+        b.x[k] = b.x[k] - xyz_min[0];
+        b.y[k] = b.y[k] - xyz_min[1];
+        b.z[k] = b.z[k] - xyz_min[2];
     }
 
     // For output, find velocity frame too
@@ -459,11 +445,10 @@ void frame(Config config, int iter,
         vxyz_frame[1] = 0.;
         vxyz_frame[2] = 0.;
         for (i=0; i<nend; i++) {
-            j = pot_idx[i];
-            k = getIndex2D(j,0,3);
-            vxyz_frame[0] = vxyz_frame[0] + mass[j]*vxyz[k];
-            vxyz_frame[1] = vxyz_frame[1] + mass[j]*vxyz[k+1];
-            vxyz_frame[2] = vxyz_frame[2] + mass[j]*vxyz[k+2];
+            k = pot_idx[i];
+            vxyz_frame[0] = vxyz_frame[0] + b.mass[k]*b.vx[k];
+            vxyz_frame[1] = vxyz_frame[1] + b.mass[k]*b.vy[k];
+            vxyz_frame[2] = vxyz_frame[2] + b.mass[k]*b.vz[k];
         }
         vxyz_frame[0] = vxyz_frame[0] / mred;
         vxyz_frame[1] = vxyz_frame[1] / mred;
@@ -471,50 +456,28 @@ void frame(Config config, int iter,
     }
 }
 
-void initvel(Config config, double *tnow, double *tvel, double dt,
-             double *vxyz, double *acc) {
-    int j,k;
-
+void step_vel(Config config, Bodies b, double dt,
+             double *tnow, double *tvel) {
+    int k;
     for (k=0; k<config.n_bodies; k++) {
-        j = 3*k;
-        vxyz[j+0] = vxyz[j+0] + 0.5*dt*acc[j+0];
-        vxyz[j+1] = vxyz[j+1] + 0.5*dt*acc[j+1];
-        vxyz[j+2] = vxyz[j+2] + 0.5*dt*acc[j+2];
-    }
-    *tvel = *tvel + 0.5*dt;
-    *tnow = *tvel;
-}
-
-void step_pos(Config config,
-              double *xyz, double *vxyz, double dt,
-              double *tnow, double *tpos) {
-    int j,k;
-
-    for (k=0; k<config.n_bodies; k++) {
-        j = 3*k;
-
-        xyz[j]   = xyz[j]   + vxyz[j]*dt;
-        xyz[j+1] = xyz[j+1] + vxyz[j+1]*dt;
-        xyz[j+2] = xyz[j+2] + vxyz[j+2]*dt;
-    }
-    *tpos = *tpos + dt;
-    *tnow = *tpos;
-}
-
-void step_vel(Config config,
-              double *vxyz, double *acc, double dt,
-              double *tnow, double *tvel) {
-    int j,k;
-
-    for (k=0; k<config.n_bodies; k++) {
-        j = 3*k;
-
-        vxyz[j]   = vxyz[j]   + acc[j]*dt;
-        vxyz[j+1] = vxyz[j+1] + acc[j+1]*dt;
-        vxyz[j+2] = vxyz[j+2] + acc[j+2]*dt;
+        b.vx[k] = b.vx[k] + dt*b.ax[k];
+        b.vy[k] = b.vy[k] + dt*b.ay[k];
+        b.vz[k] = b.vz[k] + dt*b.az[k];
     }
     *tvel = *tvel + dt;
     *tnow = *tvel;
+}
+
+void step_pos(Config config, Bodies b, double dt,
+              double *tnow, double *tpos) {
+    int k;
+    for (k=0; k<config.n_bodies; k++) {
+        b.x[k] = b.x[k] + dt*b.vx[k];
+        b.y[k] = b.y[k] + dt*b.vy[k];
+        b.z[k] = b.z[k] + dt*b.vz[k];
+    }
+    *tpos = *tpos + dt;
+    *tnow = *tpos;
 }
 
 // void tidal_start(Config config, double *xyz, double *vxyz, double *mass,
