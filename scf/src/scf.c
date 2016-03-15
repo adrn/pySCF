@@ -5,16 +5,7 @@
 #include "helpers.h"
 #include "scf.h"
 
-void accp_firstc(Config config,
-                 double *dblfact, // OUTPUT: length = lmax+1
-                 double *twoalpha, // OUTPUT: length = lmax+1
-                 double *anltilde, // OUTPUT: length = (nmax+1)*(lmax+1)
-                 double *coeflm, // OUTPUT: length = (lmax+1)*(lmax+1)
-                 int *lmin, int *lskip, // OUTPUT: integers
-                 double *c1, // OUTPUT: length = (nmax+1)*(lmax+1)
-                 double *c2, // OUTPUT: length = (nmax+1)*(lmax+1)
-                 double *c3) // OUTPUT: length = (nmax+1)
-{
+void accp_firstc(Config config, Placeholders p) {
     /*
     This code follows the "if (firstc)" block of the original Fortran
     implementation of SCF.
@@ -27,9 +18,9 @@ void accp_firstc(Config config,
     int n,l,m,idx;
     double knl, arggam, deltam0;
 
-    dblfact[1] = 1.;
+    p.dblfact[1] = 1.;
     for (l=2; l<=config.lmax; l++) {
-        dblfact[l] = dblfact[l-1]*(2.*l-1.);
+        p.dblfact[l] = p.dblfact[l-1]*(2.*l-1.);
     }
 
     for (n=0; n<=config.nmax; n++) {
@@ -37,53 +28,47 @@ void accp_firstc(Config config,
             knl = 0.5*n*(n+4.*l+3.)+(l+1.)*(2.*l+1.);
 
             idx = getIndex2D(n,l,config.lmax+1);
-            anltilde[idx] = -pow(2.,(8.*l+6.)) * gsl_sf_fact(n)*(n+2.*l+1.5);
-            anltilde[idx] = anltilde[idx] * pow(gsl_sf_gamma(2*l + 1.5), 2);
-            anltilde[idx] = anltilde[idx] / (4.*M_PI*knl*gsl_sf_fact(n+4*l+2));
+            p.anltilde[idx] = -pow(2.,(8.*l+6.)) * gsl_sf_fact(n)*(n+2.*l+1.5);
+            p.anltilde[idx] = p.anltilde[idx] * pow(gsl_sf_gamma(2*l + 1.5), 2);
+            p.anltilde[idx] = p.anltilde[idx] / (4.*M_PI*knl*gsl_sf_fact(n+4*l+2));
         }
     }
 
     for (l=0; l <= config.lmax; l++) {
-        twoalpha[l] = 2.*(2.*l+1.5);
+        p.twoalpha[l] = 2.*(2.*l+1.5);
         for (m=0; m<=l; m++) {
             deltam0 = 2.;
             if (m == 0)
                 deltam0 = 1.;
 
             idx = getIndex2D(l,m,config.lmax+1);
-            coeflm[idx] = (2.*l+1.) * deltam0 * gsl_sf_fact(l-m) / gsl_sf_fact(l+m);
+            p.coeflm[idx] = (2.*l+1.) * deltam0 * gsl_sf_fact(l-m) / gsl_sf_fact(l+m);
         }
     }
 
     for (n=1; n<=config.nmax; n++) {
-        c3[n] = 1. / (n+1.);
+        p.c3[n] = 1. / (n+1.);
         for (l=0; l<=config.lmax; l++) {
             idx = getIndex2D(n,l,config.lmax+1);
-            c1[idx] = 2.0*n + twoalpha[l];
-            c2[idx] = n-1.0 + twoalpha[l];
+            p.c1[idx] = 2.0*n + p.twoalpha[l];
+            p.c2[idx] = n-1.0 + p.twoalpha[l];
         }
     }
 
-    *lskip = 1;
+    *(p.lskip) = 1;
     if (config.zeroodd || config.zeroeven) {
-        *lskip = 2;
+        *(p.lskip) = 2;
     }
 
-    *lmin = 0;
+    *(p.lmin) = 0;
     if (config.zeroeven) {
-        *lmin = 1;
+        *(p.lmin) = 1;
     }
 }
 
-void accp_LH(Config config, double *xyz, double *mass, int *ibound, // INPUT
-             double *sinsum, double *cossum, // INPUT: length = (nmax+1)*(lmax+1)*(lmax+1) (to avoid re-defining)
-             double G, int *firstc, // INPUT
-             double *dblfact, double *twoalpha, double *anltilde, double *coeflm,
-             int *lmin, int *lskip,
-             double *c1, double *c2, double *c3,
-             double *pot, // OUTPUT: length = nbodies
-             double *acc) // OUTPUT: length = 3*nbodies
-{
+void accp_LH(Config config, double *xyz, double *mass, int *ibound,
+             Placeholders p, int *firstc,
+             double *pot, double *acc) {
     /*
     */
 
@@ -98,16 +83,12 @@ void accp_LH(Config config, double *xyz, double *mass, int *ibound, // INPUT
     int lmax = config.lmax;
     int nmax = config.nmax;
     double cosmphi[lmax+1], sinmphi[lmax+1];
-    double ultrasp[(nmax+1)*(lmax+1)], ultraspt[(nmax+1)*(lmax+1)], ultrasp1[(nmax+1)*(lmax+1)];
-    double plm[(lmax+1)*(lmax+1)], dplm[(lmax+1)*(lmax+1)];
 
     // printf("firstc %d\n", *firstc);
     // printf("lmin lskip %d %d\n", *lmin, *lskip);
 
     if (*firstc) {
-        accp_firstc(config,
-                    dblfact, twoalpha, anltilde, coeflm,
-                    lmin, lskip, c1, c2, c3);
+        accp_firstc(config, p);
         *firstc = 0;
     }
     // printf("firstc %d\n", *firstc);
@@ -136,8 +117,8 @@ void accp_LH(Config config, double *xyz, double *mass, int *ibound, // INPUT
         for (m=0; m<=l; m++) {
             for (n=0; n<=nmax; n++) {
                 i1 = getIndex3D(n,l,m,lmax+1,lmax+1);
-                sinsum[i1] = 0.;
-                cossum[i1] = 0.;
+                p.sinsum[i1] = 0.;
+                p.cossum[i1] = 0.;
             }
         }
     }
@@ -163,23 +144,23 @@ void accp_LH(Config config, double *xyz, double *mass, int *ibound, // INPUT
             // printf("sinmphi %f %f %f %f\n", sinmphi[0], sinmphi[1], sinmphi[2], sinmphi[3]);
 
             for (l=0; l<=lmax; l++) {
-                ultrasp[getIndex2D(0,l,lmax+1)] = 1.;
-                ultrasp[getIndex2D(1,l,lmax+1)] = twoalpha[l]*xi;
+                p.ultrasp[getIndex2D(0,l,lmax+1)] = 1.;
+                p.ultrasp[getIndex2D(1,l,lmax+1)] = p.twoalpha[l]*xi;
 
-                un = ultrasp[getIndex2D(1,l,lmax+1)];
+                un = p.ultrasp[getIndex2D(1,l,lmax+1)];
                 unm1 = 1.0;
 
                 for (n=1; n<nmax; n++) {
                     i1 = getIndex2D(n+1,l,lmax+1);
                     i2 = getIndex2D(n,l,lmax+1);
-                    ultrasp[i1] = (c1[i2]*xi*un-c2[i2]*unm1)*c3[n];
+                    p.ultrasp[i1] = (p.c1[i2]*xi*un-p.c2[i2]*unm1)*p.c3[n];
                     unm1 = un;
-                    un = ultrasp[i1];
+                    un = p.ultrasp[i1];
                 }
 
                 for (n=0; n<=nmax; n++) {
                     i1 = getIndex2D(n,l,lmax+1);
-                    ultraspt[i1] = ultrasp[i1] * anltilde[i1];
+                    p.ultraspt[i1] = p.ultrasp[i1] * p.anltilde[i1];
                 }
             }
 
@@ -190,39 +171,39 @@ void accp_LH(Config config, double *xyz, double *mass, int *ibound, // INPUT
 
             for (m=0; m<=lmax; m++) {
                 i1 = getIndex2D(m,m,lmax+1);
-                plm[i1] = 1.0;
+                p.plm[i1] = 1.0;
                 if (m > 0) {
-                    plm[i1] = pow(-1.,m) * dblfact[m] * pow(sqrt(1.-costh*costh), m);
+                    p.plm[i1] = pow(-1.,m) * p.dblfact[m] * pow(sqrt(1.-costh*costh), m);
                 }
 
-                plm1m = plm[i1];
+                plm1m = p.plm[i1];
                 plm2m = 0.0;
 
                 for (l=m+1; l<=lmax; l++) {
                     i2 = getIndex2D(l,m,lmax+1);
-                    plm[i2] = (costh*(2.*l-1.)*plm1m - (l+m-1.)*plm2m) / (l-m);
+                    p.plm[i2] = (costh*(2.*l-1.)*plm1m - (l+m-1.)*plm2m) / (l-m);
                     plm2m = plm1m;
-                    plm1m = plm[i2];
+                    plm1m = p.plm[i2];
                 }
             }
             // printf("plm %f %f %f %f %f\n", plm[getIndex2D(0,0,lmax+1)], plm[getIndex2D(1,0,lmax+1)],
             //        plm[getIndex2D(1,3,lmax+1)], plm[getIndex2D(3,1,lmax+1)], plm[getIndex2D(4,4,lmax+1)]);
 
-            for (l=(*lmin); l<=lmax; l=l+(*lskip)) {
+            for (l=(*(p.lmin)); l<=lmax; l=l+(*(p.lskip))) {
                 temp5 = pow(r,l) / pow(1.+r,2*l+1) * mass[k];
                 // printf("temp5 %f %f %d %f\n", temp5, r, l, mass[k]);
 
                 for (m=0; m<=l; m++) {
                     i1 = getIndex2D(l,m,lmax+1);
-                    ttemp5 = temp5*plm[i1]*coeflm[i1];
+                    ttemp5 = temp5 * p.plm[i1] * p.coeflm[i1];
                     temp3 = ttemp5 * sinmphi[m];
                     temp4 = ttemp5 * cosmphi[m];
 
                     for (n=0; n<=nmax; n++) {
                         i1 = getIndex3D(n,l,m,lmax+1,lmax+1);
                         i2 = getIndex2D(n,l,lmax+1);
-                        sinsum[i1] = sinsum[i1] + temp3*ultraspt[i2];
-                        cossum[i1] = cossum[i1] + temp4*ultraspt[i2];
+                        p.sinsum[i1] = p.sinsum[i1] + temp3*p.ultraspt[i2];
+                        p.cossum[i1] = p.cossum[i1] + temp4*p.ultraspt[i2];
                     }
                 }
             }
@@ -266,57 +247,57 @@ void accp_LH(Config config, double *xyz, double *mass, int *ibound, // INPUT
         aphi = 0.;
 
         for (l=0; l<=lmax; l++) {
-            ultrasp[getIndex2D(0,l,lmax+1)] = 1.;
-            ultrasp[getIndex2D(1,l,lmax+1)] = twoalpha[l]*xi;
-            ultrasp1[getIndex2D(0,l,lmax+1)] = 0.;
-            ultrasp1[getIndex2D(1,l,lmax+1)] = 1.;
+            p.ultrasp[getIndex2D(0,l,lmax+1)] = 1.;
+            p.ultrasp[getIndex2D(1,l,lmax+1)] = p.twoalpha[l]*xi;
+            p.ultrasp1[getIndex2D(0,l,lmax+1)] = 0.;
+            p.ultrasp1[getIndex2D(1,l,lmax+1)] = 1.;
 
-            un = ultrasp[getIndex2D(1,l,lmax+1)];
+            un = p.ultrasp[getIndex2D(1,l,lmax+1)];
             unm1 = 1.;
 
             for (n=1; n<nmax; n++) {
                 i1 = getIndex2D(n+1,l,lmax+1);
                 i2 = getIndex2D(n,l,lmax+1);
-                ultrasp[i1] = (c1[i2]*xi*un - c2[i2]*unm1)*c3[n];
+                p.ultrasp[i1] = (p.c1[i2]*xi*un - p.c2[i2]*unm1) * p.c3[n];
                 unm1 = un;
-                un = ultrasp[i1];
-                ultrasp1[i1] = ((twoalpha[l]+(n+1)-1.)*unm1-(n+1)*xi*ultrasp[i1]) / (twoalpha[l]*(1.-xi*xi));
+                un = p.ultrasp[i1];
+                p.ultrasp1[i1] = ((p.twoalpha[l]+(n+1)-1.)*unm1-(n+1)*xi*p.ultrasp[i1]) / (p.twoalpha[l]*(1.-xi*xi));
             }
         }
 
         for (m=0; m<=lmax; m++) {
             i1 = getIndex2D(m,m,lmax+1);
-            plm[i1] = 1.0;
+            p.plm[i1] = 1.0;
             if (m > 0) {
-                plm[i1] = pow(-1.,m) * dblfact[m] * pow(sqrt(1.-costh*costh), m);
+                p.plm[i1] = pow(-1.,m) * p.dblfact[m] * pow(sqrt(1.-costh*costh), m);
             }
 
-            plm1m = plm[i1];
+            plm1m = p.plm[i1];
             plm2m = 0.0;
 
             for (l=m+1; l<=lmax; l++) {
                 i2 = getIndex2D(l,m,lmax+1);
-                plm[i2] = (costh*(2.*l-1.)*plm1m - (l+m-1.)*plm2m) / (l-m);
+                p.plm[i2] = (costh*(2.*l-1.)*plm1m - (l+m-1.)*plm2m) / (l-m);
                 plm2m = plm1m;
-                plm1m = plm[i2];
+                plm1m = p.plm[i2];
             }
         }
 
-        dplm[0,0] = 0.;
+        p.dplm[0,0] = 0.;
 
         for (l=1; l<=lmax; l++) {
             for (m=0; m<=l; m++) {
                 i1 = getIndex2D(l,m,lmax+1);
                 if (l == m) {
-                    dplm[i1]=l*costh*plm[i1]/(costh*costh-1.0);
+                    p.dplm[i1]=l*costh*p.plm[i1]/(costh*costh-1.0);
                 } else {
                     i2 = getIndex2D(l-1,m,lmax+1);
-                    dplm[i1]=(l*costh*plm[i1]-(l+m)*plm[i2]) / (costh*costh-1.0);
+                    p.dplm[i1]=(l*costh*p.plm[i1]-(l+m)*p.plm[i2]) / (costh*costh-1.0);
                 }
             }
         }
 
-        for (l=(*lmin); l<=lmax; l=l+(*lskip)) {
+        for (l=(*(p.lmin)); l<=lmax; l=l+(*(p.lskip))) {
             temp3 = 0.;
             temp4 = 0.;
             temp5 = 0.;
@@ -330,19 +311,19 @@ void accp_LH(Config config, double *xyz, double *mass, int *ibound, // INPUT
                 for (n=0; n<=nmax; n++) {
                     i1 = getIndex2D(n,l,lmax+1);
                     i2 = getIndex3D(n,l,m,lmax+1,lmax+1);
-                    clm = clm + ultrasp[i1]*cossum[i2];
-                    dlm = dlm + ultrasp[i1]*sinsum[i2];
-                    elm = elm + ultrasp1[i1]*cossum[i2];
-                    flm = flm + ultrasp1[i1]*sinsum[i2];
+                    clm = clm + p.ultrasp[i1]*p.cossum[i2];
+                    dlm = dlm + p.ultrasp[i1]*p.sinsum[i2];
+                    elm = elm + p.ultrasp1[i1]*p.cossum[i2];
+                    flm = flm + p.ultrasp1[i1]*p.sinsum[i2];
                 }
 
                 i1 = getIndex2D(l,m,lmax+1);
-                temp3 = temp3 + plm[i1]*(clm*cosmphi[m]+dlm*sinmphi[m]);
-                temp4 = temp4 - plm[i1]*(elm*cosmphi[m]+flm*sinmphi[m]);
+                temp3 = temp3 + p.plm[i1]*(clm*cosmphi[m]+dlm*sinmphi[m]);
+                temp4 = temp4 - p.plm[i1]*(elm*cosmphi[m]+flm*sinmphi[m]);
                 // printf("temp4 %e %e %e %d %d %d\n", temp4, elm, flm, n, l, m);
-                temp5 = temp5 - dplm[i1]*(clm*cosmphi[m]+dlm*sinmphi[m]);
-                // printf("temp5 %e %e %e %e %d %d %d\n", temp5, dplm[i1], clm, dlm, n, l, m);
-                temp6 = temp6 - m*plm[i1]*(dlm*cosmphi[m]-clm*sinmphi[m]);
+                temp5 = temp5 - p.dplm[i1]*(clm*cosmphi[m]+dlm*sinmphi[m]);
+                // printf("temp5 %e %e %e %e %d %d %d\n", temp5, p.dplm[i1], clm, dlm, n, l, m);
+                temp6 = temp6 - m*p.plm[i1]*(dlm*cosmphi[m]-clm*sinmphi[m]);
             }
 
             phinltil = pow(r,l) / pow(1.+r, 2*l+1);
@@ -359,10 +340,10 @@ void accp_LH(Config config, double *xyz, double *mass, int *ibound, // INPUT
         ath = -sinth*ath/r;
         aphi = aphi/(r*sinth);
 
-        acc[j+0] = G*(sinth*cosp*ar + costh*cosp*ath - sinp*aphi);
-        acc[j+1] = G*(sinth*sinp*ar + costh*sinp*ath + cosp*aphi);
-        acc[j+2] = G*(costh*ar - sinth*ath);
-        pot[k] = pot[k]*G;
+        acc[j+0] = config.G*(sinth*cosp*ar + costh*cosp*ath - sinp*aphi);
+        acc[j+1] = config.G*(sinth*sinp*ar + costh*sinp*ath + cosp*aphi);
+        acc[j+2] = config.G*(costh*ar - sinth*ath);
+        pot[k] = pot[k]*config.G;
     }
 
 }
@@ -390,26 +371,15 @@ void accp_external(Config config, double *xyz,
     }
 }
 
-void acc_pot(Config config, int selfgrav, double extern_strength,
-             double *xyz, double *mass, int *ibound, // INPUT
-             double *sinsum, double *cossum, // INPUT: length = (nmax+1)*(lmax+1)*(lmax+1) (to avoid re-defining)
-             double G, int *firstc, // INPUT
-             double *dblfact, double *twoalpha, double *anltilde, double *coeflm,
-             int *lmin, int *lskip,
-             double *c1, double *c2, double *c3,
-             double *pot, // OUTPUT: length = nbodies
-             double *acc) // OUTPUT: length = 3*nbodies
-{
+void acc_pot(Config config, double extern_strength,
+             double *xyz, double *mass, int *ibound,
+             Placeholders p, int *firstc,
+             double *pot, double *acc) {
     int j,k;
 
-    if (selfgrav) {
-        accp_LH(config, xyz, mass, ibound,
-                sinsum, cossum, G, firstc,
-                dblfact, twoalpha, anltilde, coeflm, lmin, lskip,
-                c1, c2, c3, pot, acc);
-
+    if (config.selfgravitating) {
+        accp_LH(config, xyz, mass, ibound, p, firstc, pot, acc);
         accp_external(config, xyz, pot, acc, extern_strength);
-
     } else {
         for (k=0; k<config.n_bodies; k++) {
             j = 3*k;

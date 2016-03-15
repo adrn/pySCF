@@ -7,40 +7,43 @@ typedef struct {
     int lmax;
     int zeroodd;
     int zeroeven;
+    int selfgravitating;
     double ru;
     double mu;
     double vu;
     double tu;
+    double G;
 } Config;
 
-extern void accp_firstc(Config config,
-                        double *dblfact,
-                        double *twoalpha,
-                        double *anltilde,
-                        double *coeflm,
-                        int *lmin, int *lskip,
-                        double *c1,
-                        double *c2,
-                        double *c3);
+typedef struct {
+    double *dblfact;
+    double *twoalpha;
+    double *anltilde;
+    double *coeflm;
+    double *plm;
+    double *dplm;
+    double *ultrasp;
+    double *ultraspt;
+    double *ultrasp1;
+    double *sinsum;
+    double *cossum;
+    double *c1;
+    double *c2;
+    double *c3;
+    int *lmin;
+    int *lskip;
+} Placeholders;
+
+extern void accp_firstc(Config config, Placeholders p);
 
 extern void accp_LH(Config config, double *xyz, double *mass, int *ibound,
-                    double *sinsum, double *cossum,
-                    double G, int *firstc,
-                    double *dblfact, double *twoalpha, double *anltilde, double *coeflm,
-                    int *lmin, int *lskip,
-                    double *c1, double *c2, double *c3,
-                    double *pot,
-                    double *acc);
+                    Placeholders p, int *firstc,
+                    double *pot, double *acc);
 
-extern void acc_pot(Config config, int selfgrav, double extern_strength,
+extern void acc_pot(Config config, double extern_strength,
                     double *xyz, double *mass, int *ibound,
-                    double *sinsum, double *cossum,
-                    double G, int *firstc,
-                    double *dblfact, double *twoalpha, double *anltilde, double *coeflm,
-                    int *lmin, int *lskip,
-                    double *c1, double *c2, double *c3,
-                    double *pot,
-                    double *acc);
+                    Placeholders p, int *firstc,
+                    double *pot, double *acc);
 
 extern void frame(Config config, int iter,
                   double *xyz, double *vxyz, double *mass, double *pot,

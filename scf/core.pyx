@@ -30,20 +30,35 @@ cdef extern from "src/scf.h":
         int lmax
         int zeroodd
         int zeroeven
+        int selfgravitating
         double ru
         double mu
         double vu
         double tu
+        double G
 
-    void acc_pot(Config config, int selfgrav, double extern_strength,
+    ctypedef struct Placeholders:
+        double *dblfact
+        double *twoalpha
+        double *anltilde
+        double *coeflm
+        double *plm
+        double *dplm
+        double *ultrasp
+        double *ultraspt
+        double *ultrasp1
+        double *sinsum
+        double *cossum
+        double *c1
+        double *c2
+        double *c3
+        int *lmin
+        int *lskip
+
+    void acc_pot(Config config, double extern_strength,
                  double *xyz, double *mass, int *ibound,
-                 double *sinsum, double *cossum,
-                 double G, int *firstc,
-                 double *dblfact, double *twoalpha, double *anltilde, double *coeflm,
-                 int *lmin, int *lskip,
-                 double *c1, double *c2, double *c3,
-                 double *pot,
-                 double *acc) nogil
+                 Placeholders p, int *firstc,
+                 double *pot, double *acc) nogil
 
     void frame(Config config, int iter,
                double *xyz, double *vxyz, double *mass, double *pot,
@@ -66,11 +81,11 @@ def scf():
     cdef:
         int N = 128
         # int N = 10000
-        double G = 1.
         double t0 = 0.
         double dt = 0.1
         int firstc = 1
         Config config
+        Placeholders p
 
         # turn these into (n_bodies,3) arrays
         double[:,::1] xyz = np.ascontiguousarray(np.vstack([bodies[n] for n in ['x','y','z']]).T[:N])
@@ -82,23 +97,23 @@ def scf():
         int nmax = 6
         int lmax = 4
 
-        int selfgrav = 1
-
-        double[:,:,::1] sinsum = np.zeros((nmax+1,lmax+1,lmax+1))
-        double[:,:,::1] cossum = np.zeros((nmax+1,lmax+1,lmax+1))
-
-        # These are set automatically, just need to allocate them
-        int lmin = 0
-        int lskip = 0
-
+        # placeholder arrays, defined once
         double[::1] dblfact = np.zeros(lmax+1)
         double[::1] twoalpha = np.zeros(lmax+1)
         double[:,::1] anltilde = np.zeros((nmax+1,lmax+1))
         double[:,::1] coeflm = np.zeros((lmax+1,lmax+1))
-
+        double[:,::1] plm = np.zeros((lmax+1,lmax+1))
+        double[:,::1] dplm = np.zeros((lmax+1,lmax+1))
+        double[:,::1] ultrasp = np.zeros((nmax+1,lmax+1))
+        double[:,::1] ultraspt = np.zeros((nmax+1,lmax+1))
+        double[:,::1] ultrasp1 = np.zeros((nmax+1,lmax+1))
+        double[:,:,::1] sinsum = np.zeros((nmax+1,lmax+1,lmax+1))
+        double[:,:,::1] cossum = np.zeros((nmax+1,lmax+1,lmax+1))
         double[:,::1] c1 = np.zeros((nmax+1,lmax+1))
         double[:,::1] c2 = np.zeros((nmax+1,lmax+1))
         double[::1] c3 = np.zeros(nmax+1)
+        int lmin = 0
+        int lskip = 0
 
         double[:,::1] acc = np.zeros((N,3))
         double[::1] pot = np.zeros(N)
@@ -127,19 +142,41 @@ def scf():
 
         double tnow, tpos, tvel
 
-    config.ru = ru
-    config.mu = mu
-    config.tu = tu
-    config.vu = vu
+    # Configuration stuff
     config.n_bodies = N
     config.n_recenter = 100
     config.n_snapshot = 10
     config.n_tidal = 100
+    config.selfgravitating = 1
     config.nmax = nmax
     config.lmax = lmax
     config.zeroodd = 0
     config.zeroeven = 0
+    config.G = 1.
+    config.ru = ru
+    config.mu = mu
+    config.tu = tu
+    config.vu = vu
 
+    # Pointers to a bunch of placeholder arrays
+    p.lmin = &lmin
+    p.lskip = &lskip
+    p.dblfact = &dblfact[0]
+    p.twoalpha = &twoalpha[0]
+    p.anltilde = &anltilde[0,0]
+    p.coeflm = &coeflm[0,0]
+    p.plm = &plm[0,0]
+    p.dplm = &dplm[0,0]
+    p.ultrasp = &ultrasp[0,0]
+    p.ultraspt = &ultraspt[0,0]
+    p.ultrasp1 = &ultrasp1[0,0]
+    p.sinsum = &sinsum[0,0,0]
+    p.cossum = &cossum[0,0,0]
+    p.c1 = &c1[0,0]
+    p.c2 = &c2[0,0]
+    p.c3 = &c3[0]
+
+    # initial strength of tidal field
     if config.n_tidal > 0:
         extern_strength = 0.
     else:
@@ -151,13 +188,9 @@ def scf():
     tpos = tnow
     tvel = tnow
 
-    acc_pot(config, selfgrav, extern_strength,
+    acc_pot(config, extern_strength,
             &xyz[0,0], &mass[0], &ibound[0],
-            &sinsum[0,0,0], &cossum[0,0,0],
-            G, &firstc,
-            &dblfact[0], &twoalpha[0], &anltilde[0,0], &coeflm[0,0],
-            &lmin, &lskip,
-            &c1[0,0], &c2[0,0], &c3[0],
+            p, &firstc,
             &pot[0], &acc[0,0])
 
     for i in range(3):
