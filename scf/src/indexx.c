@@ -2,7 +2,7 @@
 #include "nrutil.h"
 #define SWAP(a,b) itemp=(a);(a)=(b);(b)=itemp;
 #define M 7
-#define NSTACK 64
+#define NSTACK 65536
 
 void indexx(unsigned int n, double *arr, unsigned int *indx)
 {
