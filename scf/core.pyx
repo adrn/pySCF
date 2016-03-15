@@ -27,6 +27,8 @@ cdef extern from "math.h":
 cdef extern from "src/scf.h":
     ctypedef struct Config:
         int n_steps
+        double dt
+        double t0
         int n_bodies
         int n_recenter
         int n_snapshot
@@ -89,11 +91,11 @@ cdef extern from "src/scf.h":
                   double *tnow, double *tvel) nogil
 
     void tidal_start(Config config, Bodies b, Placeholders p,
-                     double dt, double *tnow, double *tpos, double *tvel,
+                     double *tnow, double *tpos, double *tvel,
                      int *pot_idx, double *xyz_frame, double *vxyz_frame) nogil
 
     void step_system(int iter, Config config, Bodies b, Placeholders p,
-                     double dt, double *tnow, double *tpos, double *tvel,
+                     double *tnow, double *tpos, double *tvel,
                      int *pot_idx, double *xyz_frame, double *vxyz_frame) nogil
 
 cdef extern from "src/helpers.h":
@@ -113,8 +115,6 @@ def scf():
     cdef:
         # int N = 128
         int N = 10000
-        double t0 = 0.
-        double dt = 1. # to compare to SCF
         int firstc = 1
         Config config
         Placeholders p
@@ -184,6 +184,8 @@ def scf():
     # Configuration stuff
     config.n_bodies = N
     config.n_steps = 4096
+    config.dt = 1.
+    config.t0 = 0.
     config.n_recenter = 100
     config.n_snapshot = 512
     config.n_tidal = 128 # should be >= 1, matched to fortran
@@ -240,7 +242,7 @@ def scf():
 
     # -------------------------------
     # this stuff follows `initsys`
-    tnow = t0
+    tnow = config.t0
     tpos = tnow
     tvel = tnow
 
@@ -259,7 +261,7 @@ def scf():
     frame(config, 0, b, &pot_idx[0], &xyz_frame[0], &vxyz_frame[0])
 
     # initialize velocities (take a half step in time)
-    step_vel(config, b, 0.5*dt, &tnow, &tvel)
+    step_vel(config, b, 0.5*config.dt, &tnow, &tvel)
 
     # for i in range(4):
     #     print("xyz", x[i], y[i], z[i])
@@ -269,33 +271,29 @@ def scf():
     #     print()
     # return
 
-    print(tnow, tvel, dt)
-
     # slowly turn on tidal field
     # TODO: do tidal start in Cython?
-    tidal_start(config, b, p, dt, &tnow, &tpos, &tvel,
+    tidal_start(config, b, p, &tnow, &tpos, &tvel,
                 &pot_idx[0], &xyz_frame[0], &vxyz_frame[0])
 
     j = 0
     for i in range(config.n_steps):
         PyErr_CheckSignals()
-        step_system(i, config, b, p, dt, &tnow, &tpos, &tvel,
+        step_system(i, config, b, p, &tnow, &tpos, &tvel,
                     &pot_idx[0], &xyz_frame[0], &vxyz_frame[0])
 
         if ((i+1) % config.n_snapshot) == 0 or i == 0:
-            print(tnow, tpos, tvel)
             snap_filename = os.path.join(output_path, "SNAP{:04d}".format(j))
 
-            step_vel(config, b, 0.5*dt, &tnow, &tvel)
-            print(tnow, tpos, tvel)
+            step_vel(config, b, 0.5*config.dt, &tnow, &tvel)
+
             arr = np.array([x,y,z,vx,vy,vz]).T
             arr[:,0] += xyz_frame[0]
             arr[:,1] += xyz_frame[1]
             arr[:,2] += xyz_frame[2]
             np.savetxt(snap_filename, arr)
 
-            step_vel(config, b, -0.5*dt, &tnow, &tvel)
-            print(tnow, tpos, tvel)
+            step_vel(config, b, -0.5*config.dt, &tnow, &tvel)
 
             j += 1
 

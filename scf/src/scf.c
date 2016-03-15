@@ -8,12 +8,8 @@
 void accp_firstc(Config config, Placeholders p) {
     /*
     This code follows the "if (firstc)" block of the original Fortran
-    implementation of SCF.
-
-    Will call with:
-
-    int lmin, lskip;
-    accp_firstc(..., &dblfact[0], ..., &lmin, &lskip, ...)
+    implementation of SCF. This just initializes values for arrays of
+    coefficients needed for the basis function expansion.
     */
     int n,l,m,idx;
     double knl, arggam, deltam0;
@@ -66,8 +62,25 @@ void accp_firstc(Config config, Placeholders p) {
     }
 }
 
-void accp_LH(Config config, Bodies b, Placeholders p, int *firstc) {
+void accp_bfe(Config config, Bodies b, Placeholders p, int *firstc) {
     /*
+    Compute the acceleration and potential energy from the basis function
+    expansion (BFE) estimate of the gravitational potential/density of
+    particles still bound to the satellite system.
+
+    Parameters
+    ----------
+    config : Config (struct)
+        Struct containing configuration parameters.
+    b : Bodies (struct)
+        Struct of pointers to arrays that contain information about the mass
+        particles (the bodies).
+    p : Placeholders (struct)
+        Struct of pointers to placeholder arrays used in the BFE calculations.
+    firstc : int
+        Boolean integer value specifying whether this is the first acceleration
+        calculation or not. If so, will call `accp_firstc()` to initialize the
+        BFE coefficient / placeholder arrays.
     */
 
     int j,k,n,l,m, i1,i2;
@@ -342,6 +355,8 @@ void accp_LH(Config config, Bodies b, Placeholders p, int *firstc) {
 
 }
 
+// TODO: this should take function pointers to evaluate the potential, acceleration
+//       of the external potential, and a pointer to a parameter struct
 void accp_external(Config config, Bodies b, double strength, double *xyz_frame) {
 
     double rs = 10./config.ru;
@@ -377,7 +392,7 @@ void acc_pot(Config config, double extern_strength,
     int j,k;
 
     if (config.selfgravitating) {
-        accp_LH(config, b, p, firstc);
+        accp_bfe(config, b, p, firstc);
         accp_external(config, b, extern_strength, xyz_frame);
     } else {
         for (k=0; k<config.n_bodies; k++) {
@@ -516,7 +531,7 @@ void check_progenitor(Config config, int iter, Bodies b, Placeholders p,
 }
 
 void tidal_start(Config config, Bodies b, Placeholders p,
-                 double dt, double *tnow, double *tpos, double *tvel,
+                 double *tnow, double *tpos, double *tvel,
                  int *pot_idx, double *xyz_frame, double *vxyz_frame) {
     double v_cm[3], a_cm[3], mtot, t_tidal, strength;
     int i,k,n;
@@ -525,7 +540,7 @@ void tidal_start(Config config, Bodies b, Placeholders p,
     for (n=0; n<config.n_tidal; n++) {
 
         // Advance position by one step
-        step_pos(config, b, dt, tnow, tpos);
+        step_pos(config, b, config.dt, tnow, tpos);
 
         // Find center-of-mass vel. and acc.
         for (i=0; i<3; i++) {
@@ -555,13 +570,13 @@ void tidal_start(Config config, Bodies b, Placeholders p,
 
         // Retard position and velocity by one step relative to center of mass??
         for (k=0; k<config.n_bodies; k++) {
-            b.x[k] = b.x[k] - v_cm[0]*dt;
-            b.y[k] = b.y[k] - v_cm[1]*dt;
-            b.z[k] = b.z[k] - v_cm[2]*dt;
+            b.x[k] = b.x[k] - v_cm[0]*config.dt;
+            b.y[k] = b.y[k] - v_cm[1]*config.dt;
+            b.z[k] = b.z[k] - v_cm[2]*config.dt;
 
-            b.vx[k] = b.vx[k] - a_cm[0]*dt;
-            b.vy[k] = b.vy[k] - a_cm[1]*dt;
-            b.vz[k] = b.vz[k] - a_cm[2]*dt;
+            b.vx[k] = b.vx[k] - a_cm[0]*config.dt;
+            b.vy[k] = b.vy[k] - a_cm[1]*config.dt;
+            b.vz[k] = b.vz[k] - a_cm[2]*config.dt;
         }
         // printf("\n");
         // if (n == 2) {
@@ -576,10 +591,10 @@ void tidal_start(Config config, Bodies b, Placeholders p,
         acc_pot(config, strength, b, p, &not_firstc, xyz_frame);
 
         // Advance velocity by one step
-        step_vel(config, b, dt, tnow, tvel);
+        step_vel(config, b, config.dt, tnow, tvel);
 
         // Reset times
-        *tvel = 0.5*dt;
+        *tvel = 0.5*config.dt;
         *tpos = 0.;
         *tnow = 0.;
 
@@ -587,13 +602,13 @@ void tidal_start(Config config, Bodies b, Placeholders p,
     }
 
     // Synchronize the velocities with the positions
-    step_vel(config, b, -0.5*dt, tnow, tvel);
+    step_vel(config, b, -0.5*config.dt, tnow, tvel);
     frame(config, 0, b, pot_idx, xyz_frame, vxyz_frame);
     check_progenitor(config, 0, b, p, tnow, xyz_frame, vxyz_frame);
     // TODO: outlog?
 
     // Reset the velocities to being 1/2 step ahead of the positions
-    step_vel(config, b, -0.5*dt, tnow, tvel);
+    step_vel(config, b, -0.5*config.dt, tnow, tvel);
 
     // for (k=0; k<4; k++) {
     //     printf("%d\n", k+1);
@@ -605,15 +620,15 @@ void tidal_start(Config config, Bodies b, Placeholders p,
 }
 
 void step_system(int iter, Config config, Bodies b, Placeholders p,
-                 double dt, double *tnow, double *tpos, double *tvel,
+                 double *tnow, double *tpos, double *tvel,
                  int *pot_idx, double *xyz_frame, double *vxyz_frame) {
 
     int not_firstc = 0;
     double strength = 1.;
 
-    step_pos(config, b, dt, tnow, tpos);
+    step_pos(config, b, config.dt, tnow, tpos);
     frame(config, iter, b, pot_idx, xyz_frame, vxyz_frame);
     acc_pot(config, strength, b, p, &not_firstc, xyz_frame);
-    step_vel(config, b, dt, tnow, tvel);
+    step_vel(config, b, config.dt, tnow, tvel);
     printf("Step: %d\n", iter+1);
 }
