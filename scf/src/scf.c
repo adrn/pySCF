@@ -357,7 +357,7 @@ void accp_bfe(Config config, Bodies b, Placeholders p, int *firstc) {
 
 // TODO: this should take function pointers to evaluate the potential, acceleration
 //       of the external potential, and a pointer to a parameter struct
-void accp_external(Config config, Bodies b, COMFrame f, double strength) {
+void accp_external(Config config, Bodies b, COMFrame *f, double strength) {
 
     double rs = 10./config.ru;
     double vcirc2 = 220.*220./config.vu/config.vu;
@@ -368,9 +368,9 @@ void accp_external(Config config, Bodies b, COMFrame f, double strength) {
 
     for (k=0; k<config.n_bodies; k++) {
         // THIS IS JUST HERNQUIST
-        xx = b.x[k] + f.x;
-        yy = b.y[k] + f.y;
-        zz = b.z[k] + f.z;
+        xx = b.x[k] + (f->x);
+        yy = b.y[k] + (f->y);
+        zz = b.z[k] + (f->z);
 
         r2 = xx*xx + yy*yy + zz*zz;
         rad = sqrt(r2);
@@ -387,7 +387,7 @@ void accp_external(Config config, Bodies b, COMFrame f, double strength) {
     }
 }
 
-void acc_pot(Config config, Bodies b, Placeholders p, COMFrame f,
+void acc_pot(Config config, Bodies b, Placeholders p, COMFrame *f,
              double extern_strength, int *firstc) {
     int j,k;
 
@@ -406,7 +406,7 @@ void acc_pot(Config config, Bodies b, Placeholders p, COMFrame f,
 
 }
 
-void frame(int iter, Config config, Bodies b, COMFrame f) {
+void frame(int iter, Config config, Bodies b, COMFrame *f) {
     /*
     Shift the phase-space coordinates to be centered on the minimum potential.
     The initial value is the input position and velocity of the progenitor system.
@@ -436,11 +436,11 @@ void frame(int iter, Config config, Bodies b, COMFrame f) {
     xyz_min[2] = 0.;
 
     if ((iter == 0) || ((iter % config.n_recenter) == 0)) {
-        indexx(config.n_bodies, b.pot, f.pot_idx);
+        indexx(config.n_bodies, b.pot, (f->pot_idx));
     }
 
     for (i=0; i<nend; i++) {
-        k = f.pot_idx[i];
+        k = (f->pot_idx)[i];
         xyz_min[0] = xyz_min[0] + b.mass[k]*b.x[k];
         xyz_min[1] = xyz_min[1] + b.mass[k]*b.y[k];
         xyz_min[2] = xyz_min[2] + b.mass[k]*b.z[k];
@@ -452,9 +452,9 @@ void frame(int iter, Config config, Bodies b, COMFrame f) {
     xyz_min[2] = xyz_min[2] / mred;
 
     // Update frame and shift to center on the minimum of the potential
-    f.x = f.x + xyz_min[0];
-    f.y = f.y + xyz_min[1];
-    f.z = f.z + xyz_min[2];
+    (f->x) = (f->x) + xyz_min[0];
+    (f->y) = (f->y) + xyz_min[1];
+    (f->z) = (f->z) + xyz_min[2];
 
     for (k=0; k<config.n_bodies; k++) {
         b.x[k] = b.x[k] - xyz_min[0];
@@ -464,23 +464,23 @@ void frame(int iter, Config config, Bodies b, COMFrame f) {
 
     // For output, find velocity frame too
     if ((iter % config.n_snapshot) == 0) {
-        f.vx = 0.;
-        f.vy = 0.;
-        f.vz = 0.;
+        (f->vx) = 0.;
+        (f->vy) = 0.;
+        (f->vz) = 0.;
         for (i=0; i<nend; i++) {
-            k = f.pot_idx[i];
-            f.vx = f.vx + b.mass[k]*b.vx[k];
-            f.vy = f.vy + b.mass[k]*b.vy[k];
-            f.vz = f.vz + b.mass[k]*b.vz[k];
+            k = (f->pot_idx)[i];
+            (f->vx) = (f->vx) + b.mass[k]*b.vx[k];
+            (f->vy) = (f->vy) + b.mass[k]*b.vy[k];
+            (f->vz) = (f->vz) + b.mass[k]*b.vz[k];
         }
-        f.vx = f.vx / mred;
-        f.vy = f.vy / mred;
-        f.vz = f.vz / mred;
+        (f->vx) = (f->vx) / mred;
+        (f->vy) = (f->vy) / mred;
+        (f->vz) = (f->vz) / mred;
     }
 }
 
 void check_progenitor(int iter, Config config, Bodies b, Placeholders p,
-                      COMFrame f, double *tnow) {
+                      COMFrame *f, double *tnow) {
     double m_prog, m_safe;
     double vx_rel, vy_rel, vz_rel;
     int k,n;
@@ -489,9 +489,9 @@ void check_progenitor(int iter, Config config, Bodies b, Placeholders p,
     int broke = 0;
 
     for (k=0; k<config.n_bodies; k++) {
-        vx_rel = b.vx[k] - f.vx;
-        vy_rel = b.vy[k] - f.vy;
-        vz_rel = b.vz[k] - f.vz;
+        vx_rel = b.vx[k] - (f->vx);
+        vy_rel = b.vy[k] - (f->vy);
+        vz_rel = b.vz[k] - (f->vz);
         b.kin[k] = 0.5*(vx_rel*vx_rel + vy_rel*vy_rel + vz_rel*vz_rel);
     }
 
@@ -529,7 +529,7 @@ void check_progenitor(int iter, Config config, Bodies b, Placeholders p,
 
 }
 
-void tidal_start(Config config, Bodies b, Placeholders p, COMFrame f,
+void tidal_start(Config config, Bodies b, Placeholders p, COMFrame *f,
                  double *tnow, double *tpos, double *tvel) {
     double v_cm[3], a_cm[3], mtot, t_tidal, strength;
     int i,k,n;
@@ -618,7 +618,7 @@ void tidal_start(Config config, Bodies b, Placeholders p, COMFrame f,
 }
 
 void step_system(int iter, Config config, Bodies b, Placeholders p,
-                 COMFrame f, double *tnow, double *tpos, double *tvel) {
+                 COMFrame *f, double *tnow, double *tpos, double *tvel) {
 
     int not_firstc = 0;
     double strength = 1.;

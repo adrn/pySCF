@@ -87,10 +87,10 @@ cdef extern from "src/scf.h":
         double vz
         int *pot_idx
 
-    void acc_pot(Config config, Bodies b, Placeholders p, COMFrame f,
+    void acc_pot(Config config, Bodies b, Placeholders p, COMFrame *f,
                  double extern_strength, int *firstc) nogil
 
-    void frame(int iter, Config config, Bodies b, COMFrame f) nogil
+    void frame(int iter, Config config, Bodies b, COMFrame *f) nogil
 
     void step_vel(Config config, Bodies b, double dt,
                   double *tnow, double *tvel) nogil
@@ -98,10 +98,10 @@ cdef extern from "src/scf.h":
     void step_pos(Config config, Bodies b, double dt,
                   double *tnow, double *tvel) nogil
 
-    void tidal_start(Config config, Bodies b, Placeholders p, COMFrame f,
+    void tidal_start(Config config, Bodies b, Placeholders p, COMFrame *f,
                      double *tnow, double *tpos, double *tvel) nogil
 
-    void step_system(int iter, Config config, Bodies b, Placeholders p, COMFrame f,
+    void step_system(int iter, Config config, Bodies b, Placeholders p, COMFrame *f,
                      double *tnow, double *tpos, double *tvel) nogil
 
 cdef extern from "src/helpers.h":
@@ -272,9 +272,9 @@ def scf():
         vy[i] = vy[i] + f.vy
         vz[i] = vz[i] + f.vz
 
-    acc_pot(config, b, p, f, extern_strength, &firstc)
+    acc_pot(config, b, p, &f, extern_strength, &firstc)
 
-    frame(0, config, b, f)
+    frame(0, config, b, &f)
 
     # initialize velocities (take a half step in time)
     step_vel(config, b, 0.5*config.dt, &tnow, &tvel)
@@ -289,12 +289,12 @@ def scf():
 
     # slowly turn on tidal field
     # TODO: do tidal start in Cython?
-    tidal_start(config, b, p, f, &tnow, &tpos, &tvel)
+    tidal_start(config, b, p, &f, &tnow, &tpos, &tvel)
 
     j = 0
     for i in range(config.n_steps):
         PyErr_CheckSignals()
-        step_system(i, config, b, p, f, &tnow, &tpos, &tvel)
+        step_system(i, config, b, p, &f, &tnow, &tpos, &tvel)
 
         if ((i+1) % config.n_snapshot) == 0 or i == 0:
             snap_filename = os.path.join(output_path, "SNAP{:04d}".format(j))
