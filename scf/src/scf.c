@@ -549,87 +549,66 @@ void check_progenitor(int iter, Config config, Bodies b, Placeholders p,
 
 }
 
-void tidal_start(Config config, Bodies b, Placeholders p, COMFrame *f,
+void tidal_start(int iter, Config config, Bodies b, Placeholders p, COMFrame *f,
                  double *tnow, double *tpos, double *tvel) {
     double v_cm[3], a_cm[3], mtot, t_tidal, strength;
-    int i,k,n;
+    int i,k;
     int not_firstc = 0;
 
-    for (n=0; n<config.n_tidal; n++) {
+    // Advance position by one step
+    step_pos(config, b, config.dt, tnow, tpos);
 
-        // Advance position by one step
-        step_pos(config, b, config.dt, tnow, tpos);
+    // Find center-of-mass vel. and acc.
+    for (i=0; i<3; i++) {
+        v_cm[i] = 0.;
+        a_cm[i] = 0.;
+    }
+    mtot = 0.;
 
-        // Find center-of-mass vel. and acc.
-        for (i=0; i<3; i++) {
-            v_cm[i] = 0.;
-            a_cm[i] = 0.;
-        }
-        mtot = 0.;
+    for (k=0; k<config.n_bodies; k++) {
+        v_cm[0] = v_cm[0] + b.mass[k]*b.vx[k];
+        v_cm[1] = v_cm[1] + b.mass[k]*b.vy[k];
+        v_cm[2] = v_cm[2] + b.mass[k]*b.vz[k];
 
-        for (k=0; k<config.n_bodies; k++) {
-            v_cm[0] = v_cm[0] + b.mass[k]*b.vx[k];
-            v_cm[1] = v_cm[1] + b.mass[k]*b.vy[k];
-            v_cm[2] = v_cm[2] + b.mass[k]*b.vz[k];
+        a_cm[0] = a_cm[0] + b.mass[k]*b.ax[k];
+        a_cm[1] = a_cm[1] + b.mass[k]*b.ay[k];
+        a_cm[2] = a_cm[2] + b.mass[k]*b.az[k];
 
-            a_cm[0] = a_cm[0] + b.mass[k]*b.ax[k];
-            a_cm[1] = a_cm[1] + b.mass[k]*b.ay[k];
-            a_cm[2] = a_cm[2] + b.mass[k]*b.az[k];
-
-            mtot = mtot + b.mass[k];
-        }
-
-        for (i=0; i<3; i++) {
-            v_cm[i] = v_cm[i]/mtot;
-            a_cm[i] = a_cm[i]/mtot;
-        }
-
-        // printf("%e %e %e\n", v_cm[0], v_cm[1], v_cm[2]);
-
-        // Retard position and velocity by one step relative to center of mass??
-        for (k=0; k<config.n_bodies; k++) {
-            b.x[k] = b.x[k] - v_cm[0]*config.dt;
-            b.y[k] = b.y[k] - v_cm[1]*config.dt;
-            b.z[k] = b.z[k] - v_cm[2]*config.dt;
-
-            b.vx[k] = b.vx[k] - a_cm[0]*config.dt;
-            b.vy[k] = b.vy[k] - a_cm[1]*config.dt;
-            b.vz[k] = b.vz[k] - a_cm[2]*config.dt;
-        }
-
-        // Increase tidal field
-        t_tidal = ((double)n + 1.) / ((double)config.n_tidal);
-        strength = (-2.*t_tidal + 3.)*t_tidal*t_tidal;
-
-        // Find new accelerations
-        acc_pot(config, b, p, f, strength, &not_firstc);
-
-        // Advance velocity by one step
-        step_vel(config, b, config.dt, tnow, tvel);
-
-        // Reset times
-        *tvel = 0.5*config.dt;
-        *tpos = 0.;
-        *tnow = 0.;
-
-        printf("Tidal start: %d\n", n+1);
+        mtot = mtot + b.mass[k];
     }
 
-    // Synchronize the velocities with the positions
-    step_vel(config, b, -0.5*config.dt, tnow, tvel);
-    frame(0, config, b, f);
-    check_progenitor(0, config, b, p, f, tnow);
+    for (i=0; i<3; i++) {
+        v_cm[i] = v_cm[i]/mtot;
+        a_cm[i] = a_cm[i]/mtot;
+    }
 
-    // Reset the velocities to being 1/2 step ahead of the positions
-    step_vel(config, b, -0.5*config.dt, tnow, tvel);
+    // printf("%e %e %e\n", v_cm[0], v_cm[1], v_cm[2]);
 
-    // for (k=0; k<4; k++) {
-    //     printf("%d\n", k+1);
-    //     printf("xyz %e %e %e\n", b.x[k], b.y[k], b.z[k]);
-    //     printf("vxyz %e %e %e\n", b.vx[k], b.vy[k], b.vz[k]);
-    // }
-    // exit(0);
+    // Retard position and velocity by one step relative to center of mass??
+    for (k=0; k<config.n_bodies; k++) {
+        b.x[k] = b.x[k] - v_cm[0]*config.dt;
+        b.y[k] = b.y[k] - v_cm[1]*config.dt;
+        b.z[k] = b.z[k] - v_cm[2]*config.dt;
 
+        b.vx[k] = b.vx[k] - a_cm[0]*config.dt;
+        b.vy[k] = b.vy[k] - a_cm[1]*config.dt;
+        b.vz[k] = b.vz[k] - a_cm[2]*config.dt;
+    }
+
+    // Increase tidal field
+    t_tidal = ((double)iter + 1.) / ((double)config.n_tidal);
+    strength = (-2.*t_tidal + 3.)*t_tidal*t_tidal;
+
+    // Find new accelerations
+    acc_pot(config, b, p, f, strength, &not_firstc);
+
+    // Advance velocity by one step
+    step_vel(config, b, config.dt, tnow, tvel);
+
+    // Reset times
+    *tvel = 0.5*config.dt;
+    *tpos = 0.;
+    *tnow = 0.;
 }
 
 void step_system(int iter, Config config, Bodies b, Placeholders p,
@@ -642,5 +621,4 @@ void step_system(int iter, Config config, Bodies b, Placeholders p,
     frame(iter, config, b, f);
     acc_pot(config, b, p, f, strength, &not_firstc);
     step_vel(config, b, config.dt, tnow, tvel);
-    printf("Step: %d\n", iter+1);
 }

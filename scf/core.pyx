@@ -98,11 +98,14 @@ cdef extern from "src/scf.h":
     void step_pos(Config config, Bodies b, double dt,
                   double *tnow, double *tvel) nogil
 
-    void tidal_start(Config config, Bodies b, Placeholders p, COMFrame *f,
+    void tidal_start(int iter, Config config, Bodies b, Placeholders p, COMFrame *f,
                      double *tnow, double *tpos, double *tvel) nogil
 
     void step_system(int iter, Config config, Bodies b, Placeholders p, COMFrame *f,
                      double *tnow, double *tpos, double *tvel) nogil
+
+    void check_progenitor(int iter, Config config, Bodies b, Placeholders p,
+                          COMFrame *f, double *tnow) nogil
 
 cdef extern from "src/helpers.h":
     void indexx(int n, double *arrin, int *indx) nogil
@@ -273,23 +276,27 @@ def scf():
         vz[i] = vz[i] + f.vz
 
     acc_pot(config, b, p, &f, extern_strength, &firstc)
-
     frame(0, config, b, &f)
 
     # initialize velocities (take a half step in time)
     step_vel(config, b, 0.5*config.dt, &tnow, &tvel)
 
-    # for i in range(4):
-    #     print("xyz", x[i], y[i], z[i])
-    #     # print("pot kin", pot[i], kin[i])
-    #     print("vxyz", vx[i], vy[i], vz[i])
-    #     print("axyz", ax[i], ay[i], az[i])
-    #     print()
-    # return
+    # ------------------------------------------------------------------------
+    # Tidal start: slowly turn on tidal field
+    #
+    for i in range(config.n_tidal):
+        tidal_start(i, config, b, p, &f, &tnow, &tpos, &tvel)
+        print("Tidal start: {}".format(i+1));
 
-    # slowly turn on tidal field
-    # TODO: do tidal start in Cython?
-    tidal_start(config, b, p, &f, &tnow, &tpos, &tvel)
+    # Synchronize the velocities with the positions
+    step_vel(config, b, -0.5*config.dt, &tnow, &tvel)
+    frame(0, config, b, &f)
+    check_progenitor(0, config, b, p, &f, &tnow)
+
+    # Reset the velocities to being 1/2 step ahead of the positions
+    step_vel(config, b, -0.5*config.dt, &tnow, &tvel)
+    #
+    # ------------------------------------------------------------------------
 
     j = 0
     for i in range(config.n_steps):
@@ -310,6 +317,8 @@ def scf():
             step_vel(config, b, -0.5*config.dt, &tnow, &tvel)
 
             j += 1
+
+        print("Step: {}".format(i+1));
 
     # for i in range(1):
     #     print("xyz", x[i], y[i], z[i])
