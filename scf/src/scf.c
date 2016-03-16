@@ -428,20 +428,20 @@ void acc_pot(Config config, Bodies b, Placeholders p, COMFrame *f,
 
 void frame(int iter, Config config, Bodies b, COMFrame *f) {
     /*
-    Shift the phase-space coordinates to be centered on the minimum potential.
-    The initial value is the input position and velocity of the progenitor system.
+    Recompute the center-of-mass frame.
 
     Parameters
     ----------
     iter : int
-        The index of the current iteration (starting from 0).
-    n_recenter : int
-        After how many steps should we recenter the ...
-    n_bodies : int
-        Number of particles.
-
-    pot_idx : int* (array, length=n_bodies)
-        Index array to sort particles based on potential value.
+        The current iteration.
+    config : Config (struct)
+        Struct containing configuration parameters.
+    b : Bodies (struct)
+        Struct of pointers to arrays that contain information about the mass
+        particles (the bodies).
+    f : COMFrame (struct)
+        Pointer to center-of-pass struct containing the phase-space position
+        of the frame.
     */
 
     // take the most bound particles (?)
@@ -501,6 +501,27 @@ void frame(int iter, Config config, Bodies b, COMFrame *f) {
 
 void check_progenitor(int iter, Config config, Bodies b, Placeholders p,
                       COMFrame *f, double *tnow) {
+    /*
+    Iteratively determine which bodies are still bound to the progenitor
+    and determine whether it is still self-gravitating.
+
+    Parameters
+    ----------
+    iter : int
+        The current iteration.
+    config : Config (struct)
+        Struct containing configuration parameters.
+    b : Bodies (struct)
+        Struct of pointers to arrays that contain information about the mass
+        particles (the bodies).
+    p : Placeholders (struct)
+        Struct of pointers to placeholder arrays used in the BFE calculations.
+    f : COMFrame (struct)
+        Pointer to center-of-pass struct containing the phase-space position
+        of the frame.
+    tnow : double
+        The current simulation time.
+    */
     double m_prog, m_safe;
     double vx_rel, vy_rel, vz_rel;
     int k,n;
@@ -543,8 +564,7 @@ void check_progenitor(int iter, Config config, Bodies b, Placeholders p,
     // if the loop above didn't break, progenitor is dissolved?
     if (broke == 0) m_prog = 0.;
 
-    printf("Found progenitor mass (%d iter): %f\n", n, m_prog);
-
+    // printf("Found progenitor mass (%d iter): %f\n", n, m_prog);
     if (m_prog == 0) config.selfgravitating = 0;
 
 }
@@ -581,8 +601,6 @@ void tidal_start(int iter, Config config, Bodies b, Placeholders p, COMFrame *f,
         v_cm[i] = v_cm[i]/mtot;
         a_cm[i] = a_cm[i]/mtot;
     }
-
-    // printf("%e %e %e\n", v_cm[0], v_cm[1], v_cm[2]);
 
     // Retard position and velocity by one step relative to center of mass??
     for (k=0; k<config.n_bodies; k++) {

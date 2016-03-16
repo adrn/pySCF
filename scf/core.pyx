@@ -255,13 +255,14 @@ def scf():
     else:
         extern_strength = 1.
 
-    # -------------------------------
+    # ------------------------------------------------------------------------
     # this stuff follows `initsys`
+    #
     tnow = config.t0
     tpos = tnow
     tvel = tnow
 
-    # TODO: why??
+    # frame in simulation units
     f.x = f.x / ru
     f.y = f.y / ru
     f.z = f.z / ru
@@ -280,11 +281,14 @@ def scf():
 
     # initialize velocities (take a half step in time)
     step_vel(config, b, 0.5*config.dt, &tnow, &tvel)
+    #
+    # ------------------------------------------------------------------------
 
     # ------------------------------------------------------------------------
     # Tidal start: slowly turn on tidal field
     #
     for i in range(config.n_tidal):
+        PyErr_CheckSignals()
         tidal_start(i, config, b, p, &f, &tnow, &tpos, &tvel)
         print("Tidal start: {}".format(i+1));
 
@@ -326,5 +330,3 @@ def scf():
     #     print("axyz", ax[i], ay[i], az[i])
     #     print()
     # return
-
-
