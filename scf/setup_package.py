@@ -9,7 +9,7 @@ def get_extensions():
     cfg = setup_helpers.DistutilsExtensionArgs()
     cfg['include_dirs'].append('numpy')
     cfg['include_dirs'].append('scf/src')
-    cfg['sources'].append('scf/core.pyx')
+    cfg['sources'].append('scf/scf.pyx')
     cfg['sources'].append('scf/src/scf.c')
     cfg['sources'].append('scf/src/indexx.c')
     cfg['sources'].append('scf/src/helpers.c')
@@ -18,7 +18,7 @@ def get_extensions():
     cfg['libraries'] = ['gsl', 'gslcblas']
     cfg['extra_compile_args'] = ['--std=gnu99']
 
-    return [Extension('scf.core', **cfg)]
+    return [Extension('scf.scf', **cfg)]
 
 def get_package_data():
     return {'scf': ['src/*.h']}
