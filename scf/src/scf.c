@@ -596,10 +596,6 @@ void tidal_start(Config config, Bodies b, Placeholders p, COMFrame *f,
             b.vy[k] = b.vy[k] - a_cm[1]*config.dt;
             b.vz[k] = b.vz[k] - a_cm[2]*config.dt;
         }
-        // printf("\n");
-        // if (n == 2) {
-        //     exit(0);
-        // }
 
         // Increase tidal field
         t_tidal = ((double)n + 1.) / ((double)config.n_tidal);
@@ -623,7 +619,6 @@ void tidal_start(Config config, Bodies b, Placeholders p, COMFrame *f,
     step_vel(config, b, -0.5*config.dt, tnow, tvel);
     frame(0, config, b, f);
     check_progenitor(0, config, b, p, f, tnow);
-    // TODO: outlog?
 
     // Reset the velocities to being 1/2 step ahead of the positions
     step_vel(config, b, -0.5*config.dt, tnow, tvel);
