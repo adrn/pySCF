@@ -389,6 +389,26 @@ void accp_external(Config config, Bodies b, COMFrame *f, double strength) {
 
 void acc_pot(Config config, Bodies b, Placeholders p, COMFrame *f,
              double extern_strength, int *firstc) {
+    /*
+    Compute the total acceleration and potential energy for each N body.
+
+    Parameters
+    ----------
+    config : Config (struct)
+        Struct containing configuration parameters.
+    b : Bodies (struct)
+        Struct of pointers to arrays that contain information about the mass
+        particles (the bodies).
+    p : Placeholders (struct)
+        Struct of pointers to placeholder arrays used in the BFE calculations.
+    extern_strength : double
+        The strength of the external potential (normalized to the range (0,1)).
+        Used by `tidal_start()` to slowly turn on the external field.
+    firstc : int
+        Boolean integer value specifying whether this is the first acceleration
+        calculation or not. If so, will call `accp_firstc()` to initialize the
+        BFE coefficient / placeholder arrays.
+    */
     int j,k;
 
     if (config.selfgravitating) {
