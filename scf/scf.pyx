@@ -117,11 +117,12 @@ cdef extern from "src/helpers.h":
 
 # ----------------------------------------------------------------------------
 
-def write_snap(output_file, j, t, pos, vel, tub):
+def write_snap(output_file, i, j, t, pos, vel, tub):
     # save snapshot to output file
     with h5py.File(output_file, 'r+') as out_f:
         g = out_f.create_group('/snapshots/{}'.format(j))
         g.attrs['t'] = t
+        g.attrs['step'] = i
         g.create_dataset('pos', dtype=np.float64, shape=pos.shape, data=pos)
         g.create_dataset('vel', dtype=np.float64, shape=vel.shape, data=vel)
         g.create_dataset('tub', dtype=np.float64, shape=tub.shape, data=tub)
@@ -198,6 +199,10 @@ def run_scf(w0, bodies, mass_scale, length_scale,
 
         # timing
         double tnow, tpos, tvel
+
+        # frame position, velocity at all times
+        double[:,::1] frame_xyz = np.zeros((3,n_steps+1))
+        double[:,::1] frame_vxyz = np.zeros((3,n_steps+1))
 
     if os.path.exists(output_file):
         raise ValueError("Output file '{}' already exists.".format(output_file))
@@ -349,16 +354,22 @@ def run_scf(w0, bodies, mass_scale, length_scale,
     check_progenitor(0, config, b, p, &f, &tnow)
 
     # write initial positions out
-    write_snap(output_file, j=0, t=tnow,
+    write_snap(output_file, i=0, j=0, t=tnow,
                pos=np.vstack((np.array(x)+f.x, np.array(y)+f.y, np.array(z)+f.z)),
                vel=np.vstack((np.array(vx), np.array(vy), np.array(vz))),
                tub=tub)
-    logger.debug("\t...wrote snapshot {} to output file".format(0))
 
     # Reset the velocities to being 1/2 step ahead of the positions
     step_vel(config, b, 0.5*config.dt, &tnow, &tvel)
     #
     # ------------------------------------------------------------------------
+
+    frame_xyz[0,0] = f.x
+    frame_xyz[1,0] = f.y
+    frame_xyz[2,0] = f.z
+    frame_vxyz[0,0] = f.vx
+    frame_vxyz[1,0] = f.vy
+    frame_vxyz[2,0] = f.vz
 
     j = 1
     last_t = 0.
@@ -367,9 +378,16 @@ def run_scf(w0, bodies, mass_scale, length_scale,
         step_system(i, config, b, p, &f, &tnow, &tpos, &tvel)
         logger.debug("Step: {}".format(i+1));
 
+        frame_xyz[0,i+1] = f.x
+        frame_xyz[1,i+1] = f.y
+        frame_xyz[2,i+1] = f.z
+        frame_vxyz[0,i+1] = f.vx
+        frame_vxyz[1,i+1] = f.vy
+        frame_vxyz[2,i+1] = f.vz
+
         if config.n_snapshot > 0 and (((i+1) % config.n_snapshot) == 0 and i > 0):
             step_vel(config, b, -0.5*config.dt, &tnow, &tvel)
-            write_snap(output_file, j, t=tnow,
+            write_snap(output_file, i+1, j, t=tnow,
                        pos=np.vstack((np.array(x)+f.x, np.array(y)+f.y, np.array(z)+f.z)),
                        vel=np.vstack((np.array(vx), np.array(vy), np.array(vz))),
                        tub=tub)
@@ -379,8 +397,14 @@ def run_scf(w0, bodies, mass_scale, length_scale,
 
     if (tnow - last_t) > 0.1*dt:
         step_vel(config, b, -0.5*config.dt, &tnow, &tvel)
-        write_snap(output_file, j, t=tnow,
+        write_snap(output_file, i, j, t=tnow,
                    pos=np.vstack((np.array(x)+f.x, np.array(y)+f.y, np.array(z)+f.z)),
                    vel=np.vstack((np.array(vx), np.array(vy), np.array(vz))),
                    tub=tub)
         step_vel(config, b, 0.5*config.dt, &tnow, &tvel)
+
+    with h5py.File(output_file, 'r+') as out_f:
+        out_f.create_dataset('/cen/pos', dtype=np.float64, shape=np.array(frame_xyz).shape,
+                             data=np.array(frame_xyz))
+        out_f.create_dataset('/cen/vel', dtype=np.float64, shape=np.array(frame_vxyz).shape,
+                             data=np.array(frame_vxyz))
