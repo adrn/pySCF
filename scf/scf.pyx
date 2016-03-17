@@ -14,6 +14,9 @@ __author__ = "adrn <adrn@astro.columbia.edu>"
 import os
 
 # Third-party
+from astropy import log as logger
+import astropy.units as u
+from astropy.constants import G, M_sun
 import numpy as np
 cimport numpy as np
 np.import_array()
@@ -107,23 +110,16 @@ cdef extern from "src/scf.h":
     void check_progenitor(int iter, Config config, Bodies b, Placeholders p,
                           COMFrame *f, double *tnow) nogil
 
+# needed for some reason
 cdef extern from "src/helpers.h":
     void indexx(int n, double *arrin, int *indx) nogil
 
-def scf():
-    # read SCFBI file
-    skip = 1
-    names = ['m','x','y','z','vx','vy','vz']
-    bodies_filename = '/Users/adrian/projects/scf/fortran/SCFBI'
-    bodies = np.genfromtxt(bodies_filename, dtype=None, names=names,
-                           skip_header=skip)
-    output_path = '/Users/adrian/projects/scf/test/'
-    if not os.path.exists(output_path):
-        os.mkdir(output_path)
-
+# TODO: WAT DO ABOUT POTENTIAL!?!
+def run_scf(w0, bodies, mass_scale, length_scale,
+            dt, n_steps, t0, n_snapshot, n_recenter, n_tidal,
+            nmax, lmax, zero_odd, zero_even, self_gravity,
+            output_path):
     cdef:
-        # int N = 128
-        int N = 10000
         int firstc = 1
         Config config
         Placeholders p
@@ -131,12 +127,13 @@ def scf():
         COMFrame f
 
         # Read in the phase-space positions of the N bodies
-        double[::1] x = np.ascontiguousarray(bodies['x'][:N])
-        double[::1] y = np.ascontiguousarray(bodies['y'][:N])
-        double[::1] z = np.ascontiguousarray(bodies['z'][:N])
-        double[::1] vx = np.ascontiguousarray(bodies['vx'][:N])
-        double[::1] vy = np.ascontiguousarray(bodies['vy'][:N])
-        double[::1] vz = np.ascontiguousarray(bodies['vz'][:N])
+        int N = bodies.shape[0]
+        double[::1] x = np.ascontiguousarray(bodies.pos.value[0][:])
+        double[::1] y = np.ascontiguousarray(bodies.pos.value[1][:])
+        double[::1] z = np.ascontiguousarray(bodies.pos.value[2][:])
+        double[::1] vx = np.ascontiguousarray(bodies.vel.value[0][:])
+        double[::1] vy = np.ascontiguousarray(bodies.vel.value[1][:])
+        double[::1] vz = np.ascontiguousarray(bodies.vel.value[2][:])
         double[::1] mass = np.ones(N) / N
         int[::1] ibound = np.ones(N, dtype=np.int32)
         double[::1] tub = np.zeros(N)
@@ -145,9 +142,6 @@ def scf():
         double[::1] az = np.zeros(N)
         double[::1] pot = np.zeros(N) # (internal) potential energy
         double[::1] kin = np.zeros(N) # kinetic energy
-
-        int nmax = 6
-        int lmax = 4
 
         # placeholder arrays, defined once
         double[::1] dblfact = np.zeros(lmax+1)
@@ -173,46 +167,57 @@ def scf():
         int[::1] pot_idx = np.zeros(N, dtype=np.int32)
 
         # sim units
-        double ru = 0.01 # kpc
-        double mu = 2.5e5 # msun
-        double gee = 6.67e-8 # NOTE: this is wrong
-        double msun = 1.989e33
-        double cmpkpc = 3.085678e21
-        double secperyr = 3.1536e7
-        double tu = sqrt((cmpkpc*ru)**3/(msun*mu*gee))
+        # TODO: figure out a more sensible way to do this
+        double ru = length_scale.to(u.kpc).value
+        double mu = mass_scale.to(u.Msun).value
+        double gee = G.decompose([u.cm,u.g,u.s]).value
+        double msun = M_sun.to(u.g).value
+        double cmpkpc = (1*u.kpc).to(u.cm).value
+        double secperyr = (1*u.year).to(u.second).value
+        double tu = sqrt((cmpkpc*ru)**3 / (msun*mu*gee))
         double vu = (ru*cmpkpc*1.e-5)/tu
 
         # for turning on the potential:
         double extern_strength
 
+        # timing
         double tnow, tpos, tvel
+
+    # TODO: fucked up unit stuff
+    _G = 1.
+    X = np.sqrt(ru**3 * mu / _G)
+    time_unit = u.Unit("{:08f} Myr".format(X))
+    if hasattr(dt, 'unit'):
+        dt = dt.to(time_unit).value
 
     # Configuration stuff
     config.n_bodies = N
-    config.n_steps = 4096
-    config.dt = 1.
-    config.t0 = 0.
-    config.n_recenter = 100
-    config.n_snapshot = 512
-    config.n_tidal = 128 # should be >= 1, matched to fortran
-    config.selfgravitating = 1
-    config.nmax = nmax
-    config.lmax = lmax
-    config.zeroodd = 0
-    config.zeroeven = 0
-    config.G = 1.
+    config.n_steps = int(n_steps)
+    config.dt = float(dt)
+    config.t0 = float(t0)
+    config.n_recenter = int(n_recenter)
+    config.n_snapshot = int(n_snapshot)
+    config.n_tidal = int(n_tidal)
+    config.selfgravitating = int(self_gravity)
+    config.nmax = int(nmax)
+    config.lmax = int(lmax)
+    config.zeroodd = int(zero_odd)
+    config.zeroeven = int(zero_even)
+    config.G = 1. # HACK: do we really need to let the user set this?
     config.ru = ru
     config.mu = mu
     config.tu = tu
     config.vu = vu
 
     # the position and velocity of the progenitor
-    f.x = 15.
-    f.y = 0.
-    f.z = 0.
-    f.vx = 0.
-    f.vy = 100. # WTF - why km/s???
-    f.vz = 0.
+    xyz = w0.pos.to(u.kpc).value
+    vxyz = w0.vel.to(u.km/u.s).value
+    f.x = float(xyz[0])
+    f.y = float(xyz[1])
+    f.z = float(xyz[2])
+    f.vx = float(vxyz[0])
+    f.vy = float(vxyz[1])
+    f.vz = float(vxyz[2])
     f.pot_idx = &pot_idx[0]
 
     # The N bodies
@@ -290,7 +295,7 @@ def scf():
     for i in range(config.n_tidal):
         PyErr_CheckSignals()
         tidal_start(i, config, b, p, &f, &tnow, &tpos, &tvel)
-        print("Tidal start: {}".format(i+1));
+        logger.debug("Tidal start: {}".format(i+1));
 
     # Synchronize the velocities with the positions
     step_vel(config, b, -0.5*config.dt, &tnow, &tvel)
@@ -302,31 +307,26 @@ def scf():
     #
     # ------------------------------------------------------------------------
 
+    # TODO: if config.n_snapshot is 0, only output final state
     j = 0
     for i in range(config.n_steps):
         PyErr_CheckSignals()
         step_system(i, config, b, p, &f, &tnow, &tpos, &tvel)
 
-        if ((i+1) % config.n_snapshot) == 0 or i == 0:
-            snap_filename = os.path.join(output_path, "SNAP{:04d}".format(j))
-
+        if config.n_snapshot > 0 and (((i+1) % config.n_snapshot) == 0 or i == 0):
             step_vel(config, b, 0.5*config.dt, &tnow, &tvel)
 
-            arr = np.array([x,y,z,vx,vy,vz]).T
-            arr[:,0] += f.x
-            arr[:,1] += f.y
-            arr[:,2] += f.z
-            np.savetxt(snap_filename, arr)
+            # TODO: save snapshots
+            # arr = np.array([x,y,z,vx,vy,vz]).T
+            # arr[:,0] += f.x
+            # arr[:,1] += f.y
+            # arr[:,2] += f.z
+            # np.savetxt(snap_filename, arr)
 
             step_vel(config, b, -0.5*config.dt, &tnow, &tvel)
 
             j += 1
 
-        print("Step: {}".format(i+1));
+        logger.debug("Step: {}".format(i+1));
 
-    # for i in range(1):
-    #     print("xyz", x[i], y[i], z[i])
-    #     print("vxyz", vx[i], vy[i], vz[i])
-    #     print("axyz", ax[i], ay[i], az[i])
-    #     print()
-    # return
+    return np.vstack((np.array(x), np.array(y), np.array(z)))
