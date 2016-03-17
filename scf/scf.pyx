@@ -17,6 +17,7 @@ import os
 from astropy import log as logger
 import astropy.units as u
 from astropy.constants import G, M_sun
+import h5py
 import numpy as np
 cimport numpy as np
 np.import_array()
@@ -115,10 +116,11 @@ cdef extern from "src/helpers.h":
     void indexx(int n, double *arrin, int *indx) nogil
 
 # TODO: WAT DO ABOUT POTENTIAL!?!
+# TODO: save center of mass trajectory
 def run_scf(w0, bodies, mass_scale, length_scale,
             dt, n_steps, t0, n_snapshot, n_recenter, n_tidal,
             nmax, lmax, zero_odd, zero_even, self_gravity,
-            output_path):
+            output_file):
     cdef:
         int firstc = 1
         Config config
@@ -183,12 +185,39 @@ def run_scf(w0, bodies, mass_scale, length_scale,
         # timing
         double tnow, tpos, tvel
 
+    if os.path.exists(output_file):
+        raise ValueError("Output file '{}' already exists.".format(output_file))
+
     # TODO: fucked up unit stuff
-    _G = 1.
-    X = np.sqrt(ru**3 * mu / _G)
+    _G = G.decompose(bases=[u.kpc,u.M_sun,u.Myr]).value
+    X = (_G / ru**3 * mu)**-0.5
     time_unit = u.Unit("{:08f} Myr".format(X))
     if hasattr(dt, 'unit'):
         dt = dt.to(time_unit).value
+
+    # store input parameters in the output file
+    with h5py.File(output_file, 'w') as out_f:
+        units = out_f.create_group('units')
+        units.attrs['time'] = str(time_unit)
+        units.attrs['length'] = str('{} kpc'.format(ru))
+        units.attrs['mass'] = str('{} Msun'.format(mu))
+
+        par = out_f.create_group('parameters')
+        par.attrs['n_bodies'] = N
+
+        par.attrs['n_steps'] = n_steps
+        par.attrs['dt'] = dt
+
+        par.attrs['n_recenter'] = n_recenter
+        par.attrs['n_snapshot'] = n_snapshot
+        par.attrs['n_tidal'] = n_tidal
+        par.attrs['self_gravity'] = self_gravity
+        par.attrs['zero_odd'] = zero_odd
+        par.attrs['zero_even'] = zero_even
+        par.attrs['nmax'] = nmax
+        par.attrs['lmax'] = lmax
+
+        snaps = out_f.create_group('snapshots')
 
     # Configuration stuff
     config.n_bodies = N
@@ -302,31 +331,43 @@ def run_scf(w0, bodies, mass_scale, length_scale,
     frame(0, config, b, &f)
     check_progenitor(0, config, b, p, &f, &tnow)
 
+    # write initial positions out
+    write_snap(output_file, j=0, t=tnow,
+               pos=np.vstack((np.array(x), np.array(y), np.array(z))),
+               vel=np.vstack((np.array(vx), np.array(vy), np.array(vz))),
+               tub=tub)
+    logger.debug("\t...wrote snapshot {} to output file".format(0))
+
     # Reset the velocities to being 1/2 step ahead of the positions
-    step_vel(config, b, -0.5*config.dt, &tnow, &tvel)
+    step_vel(config, b, 0.5*config.dt, &tnow, &tvel)
     #
     # ------------------------------------------------------------------------
 
-    # TODO: if config.n_snapshot is 0, only output final state
-    j = 0
+    j = 1
     for i in range(config.n_steps):
         PyErr_CheckSignals()
         step_system(i, config, b, p, &f, &tnow, &tpos, &tvel)
-
-        if config.n_snapshot > 0 and (((i+1) % config.n_snapshot) == 0 or i == 0):
-            step_vel(config, b, 0.5*config.dt, &tnow, &tvel)
-
-            # TODO: save snapshots
-            # arr = np.array([x,y,z,vx,vy,vz]).T
-            # arr[:,0] += f.x
-            # arr[:,1] += f.y
-            # arr[:,2] += f.z
-            # np.savetxt(snap_filename, arr)
-
-            step_vel(config, b, -0.5*config.dt, &tnow, &tvel)
-
-            j += 1
-
         logger.debug("Step: {}".format(i+1));
 
-    return np.vstack((np.array(x), np.array(y), np.array(z)))
+        if config.n_snapshot > 0 and (((i+1) % config.n_snapshot) == 0 and i > 0):
+            step_vel(config, b, -0.5*config.dt, &tnow, &tvel)
+            write_snap(output_file, j, t=tnow,
+                       pos=np.vstack((np.array(x), np.array(y), np.array(z))),
+                       vel=np.vstack((np.array(vx), np.array(vy), np.array(vz))),
+                       tub=tub)
+            step_vel(config, b, 0.5*config.dt, &tnow, &tvel)
+            j += 1
+
+    # return np.vstack((np.array(x), np.array(y), np.array(z)))
+
+
+def write_snap(output_file, j, t, pos, vel, tub):
+    # save snapshot to output file
+    with h5py.File(output_file, 'r+') as out_f:
+        g = out_f.create_group('/snapshots/{}'.format(j))
+        g.attrs['t'] = t
+        g.create_dataset('pos', dtype=np.float64, shape=pos.shape, data=pos)
+        g.create_dataset('vel', dtype=np.float64, shape=vel.shape, data=vel)
+        g.create_dataset('tub', dtype=np.float64, shape=tub.shape, data=tub)
+
+    logger.debug("\t...wrote snapshot {} to output file".format(j))
