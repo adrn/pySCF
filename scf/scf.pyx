@@ -357,6 +357,7 @@ def run_scf(w0, bodies, mass_scale, length_scale,
     # ------------------------------------------------------------------------
 
     j = 1
+    last_t = 0.
     for i in range(config.n_steps):
         PyErr_CheckSignals()
         step_system(i, config, b, p, &f, &tnow, &tpos, &tvel)
@@ -370,3 +371,12 @@ def run_scf(w0, bodies, mass_scale, length_scale,
                        tub=tub)
             step_vel(config, b, 0.5*config.dt, &tnow, &tvel)
             j += 1
+            last_t = tnow
+
+    if (tnow - last_t) > 0.1*dt:
+        step_vel(config, b, -0.5*config.dt, &tnow, &tvel)
+        write_snap(output_file, j, t=tnow,
+                   pos=np.vstack((np.array(x), np.array(y), np.array(z))),
+                   vel=np.vstack((np.array(vx), np.array(vy), np.array(vz))),
+                   tub=tub)
+        step_vel(config, b, 0.5*config.dt, &tnow, &tvel)
