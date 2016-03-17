@@ -115,6 +115,19 @@ cdef extern from "src/scf.h":
 cdef extern from "src/helpers.h":
     void indexx(int n, double *arrin, int *indx) nogil
 
+# ----------------------------------------------------------------------------
+
+def write_snap(output_file, j, t, pos, vel, tub):
+    # save snapshot to output file
+    with h5py.File(output_file, 'r+') as out_f:
+        g = out_f.create_group('/snapshots/{}'.format(j))
+        g.attrs['t'] = t
+        g.create_dataset('pos', dtype=np.float64, shape=pos.shape, data=pos)
+        g.create_dataset('vel', dtype=np.float64, shape=vel.shape, data=vel)
+        g.create_dataset('tub', dtype=np.float64, shape=tub.shape, data=tub)
+
+    logger.debug("\t...wrote snapshot {} to output file".format(j))
+
 # TODO: WAT DO ABOUT POTENTIAL!?!
 # TODO: save center of mass trajectory
 def run_scf(w0, bodies, mass_scale, length_scale,
@@ -357,17 +370,3 @@ def run_scf(w0, bodies, mass_scale, length_scale,
                        tub=tub)
             step_vel(config, b, 0.5*config.dt, &tnow, &tvel)
             j += 1
-
-    # return np.vstack((np.array(x), np.array(y), np.array(z)))
-
-
-def write_snap(output_file, j, t, pos, vel, tub):
-    # save snapshot to output file
-    with h5py.File(output_file, 'r+') as out_f:
-        g = out_f.create_group('/snapshots/{}'.format(j))
-        g.attrs['t'] = t
-        g.create_dataset('pos', dtype=np.float64, shape=pos.shape, data=pos)
-        g.create_dataset('vel', dtype=np.float64, shape=vel.shape, data=vel)
-        g.create_dataset('tub', dtype=np.float64, shape=tub.shape, data=tub)
-
-    logger.debug("\t...wrote snapshot {} to output file".format(j))
