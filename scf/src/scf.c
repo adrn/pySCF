@@ -482,21 +482,20 @@ void frame(int iter, Config config, Bodies b, COMFrame *f) {
         b.z[k] = b.z[k] - xyz_min[2];
     }
 
-    // For output, find velocity frame too
-    if ((iter % config.n_snapshot) == 0) {
-        (f->vx) = 0.;
-        (f->vy) = 0.;
-        (f->vz) = 0.;
-        for (i=0; i<nend; i++) {
-            k = (f->pot_idx)[i];
-            (f->vx) = (f->vx) + b.mass[k]*b.vx[k];
-            (f->vy) = (f->vy) + b.mass[k]*b.vy[k];
-            (f->vz) = (f->vz) + b.mass[k]*b.vz[k];
-        }
-        (f->vx) = (f->vx) / mred;
-        (f->vy) = (f->vy) / mred;
-        (f->vz) = (f->vz) / mred;
+    // find velocity frame
+    (f->vx) = 0.;
+    (f->vy) = 0.;
+    (f->vz) = 0.;
+    for (i=0; i<nend; i++) {
+        k = (f->pot_idx)[i];
+        (f->vx) = (f->vx) + b.mass[k]*b.vx[k];
+        (f->vy) = (f->vy) + b.mass[k]*b.vy[k];
+        (f->vz) = (f->vz) + b.mass[k]*b.vz[k];
     }
+    (f->vx) = (f->vx) / mred;
+    (f->vy) = (f->vy) / mred;
+    (f->vz) = (f->vz) / mred;
+
 }
 
 void check_progenitor(int iter, Config config, Bodies b, Placeholders p,
