@@ -208,6 +208,9 @@ def run_scf(w0, bodies, mass_scale, length_scale,
     if hasattr(dt, 'unit'):
         dt = dt.to(time_unit).value
 
+    if hasattr(t0, 'unit'):
+        t0 = t0.to(time_unit).value
+
     # store input parameters in the output file
     with h5py.File(output_file, 'w') as out_f:
         units = out_f.create_group('units')
@@ -346,7 +349,7 @@ def run_scf(w0, bodies, mass_scale, length_scale,
 
     # write initial positions out
     write_snap(output_file, j=0, t=tnow,
-               pos=np.vstack((np.array(x), np.array(y), np.array(z))),
+               pos=np.vstack((np.array(x)+f.x, np.array(y)+f.y, np.array(z)+f.z)),
                vel=np.vstack((np.array(vx), np.array(vy), np.array(vz))),
                tub=tub)
     logger.debug("\t...wrote snapshot {} to output file".format(0))
@@ -366,7 +369,7 @@ def run_scf(w0, bodies, mass_scale, length_scale,
         if config.n_snapshot > 0 and (((i+1) % config.n_snapshot) == 0 and i > 0):
             step_vel(config, b, -0.5*config.dt, &tnow, &tvel)
             write_snap(output_file, j, t=tnow,
-                       pos=np.vstack((np.array(x), np.array(y), np.array(z))),
+                       pos=np.vstack((np.array(x)+f.x, np.array(y)+f.y, np.array(z)+f.z)),
                        vel=np.vstack((np.array(vx), np.array(vy), np.array(vz))),
                        tub=tub)
             step_vel(config, b, 0.5*config.dt, &tnow, &tvel)
@@ -376,7 +379,7 @@ def run_scf(w0, bodies, mass_scale, length_scale,
     if (tnow - last_t) > 0.1*dt:
         step_vel(config, b, -0.5*config.dt, &tnow, &tvel)
         write_snap(output_file, j, t=tnow,
-                   pos=np.vstack((np.array(x), np.array(y), np.array(z))),
+                   pos=np.vstack((np.array(x)+f.x, np.array(y)+f.y, np.array(z)+f.z)),
                    vel=np.vstack((np.array(vx), np.array(vy), np.array(vz))),
                    tub=tub)
         step_vel(config, b, 0.5*config.dt, &tnow, &tvel)
