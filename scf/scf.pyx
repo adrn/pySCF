@@ -130,6 +130,7 @@ def write_snap(output_file, j, t, pos, vel, tub):
 
 # TODO: WAT DO ABOUT POTENTIAL!?!
 # TODO: save center of mass trajectory
+# TODO: there is some bug with the first snapshot output being offset in velocity
 def run_scf(w0, bodies, mass_scale, length_scale,
             dt, n_steps, t0, n_snapshot, n_recenter, n_tidal,
             nmax, lmax, zero_odd, zero_even, self_gravity,
