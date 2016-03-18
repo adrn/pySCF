@@ -1,5 +1,5 @@
 # coding: utf-8
-# cython: debug=True
+# cython: debug=False
 # cython: boundscheck=False
 # cython: nonecheck=False
 # cython: cdivision=True
@@ -24,6 +24,8 @@ np.import_array()
 import cython
 cimport cython
 from cpython.exc cimport PyErr_CheckSignals
+
+from gary.potential.cpotential cimport _CPotential, valuefunc, gradientfunc
 
 cdef extern from "math.h":
     double sqrt(double)
@@ -130,9 +132,9 @@ def write_snap(output_file, i, j, t, pos, vel, tub):
     logger.debug("\t...wrote snapshot {} to output file".format(j))
 
 # TODO: WAT DO ABOUT POTENTIAL!?!
-# TODO: save center of mass trajectory
-# TODO: there is some bug with the first snapshot output being offset in velocity
-def run_scf(w0, bodies, mass_scale, length_scale,
+# TODO: is there some bug with the first snapshot output being offset in velocity?
+def run_scf(_CPotential cpotential,
+            w0, bodies, mass_scale, length_scale,
             dt, n_steps, t0, n_snapshot, n_recenter, n_tidal,
             nmax, lmax, zero_odd, zero_even, self_gravity,
             output_file):
