@@ -2,6 +2,8 @@
 #include "gsl/gsl_sf_legendre.h"
 #include "gsl/gsl_sf_gegenbauer.h"
 #include <math.h>
+#include <Python.h>
+#include "gary/potential/cpotential.h"
 #include "helpers.h"
 #include "scf.h"
 
@@ -357,28 +359,33 @@ void accp_bfe(Config config, Bodies b, Placeholders p, int *firstc) {
 
 // TODO: this should take function pointers to evaluate the potential, acceleration
 //       of the external potential, and a pointer to a parameter struct
-void accp_external(Config config, Bodies b, COMFrame *f, double strength) {
+void accp_external(Config config, Bodies b, COMFrame *f,
+                   valuefunc vf, gradientfunc gf, double *parvec,
+                   double strength, double *tnow) {
 
-    double rs = 10./config.ru;
-    double vcirc2 = 220.*220./config.vu/config.vu;
-    double GMs = 10.0*vcirc2/config.ru;
+    // double rs = 10./config.ru;
+    // double vcirc2 = 220.*220./config.vu/config.vu;
+    // double GMs = 10.0*vcirc2/config.ru;
 
     int j, k;
-    double xx, yy, zz, r2, rad, tsrad;
+    // double xx, yy, zz, r2, rad, tsrad;
+    double grad[3], q[3];
 
     for (k=0; k<config.n_bodies; k++) {
         // THIS IS JUST HERNQUIST
-        xx = b.x[k] + (f->x);
-        yy = b.y[k] + (f->y);
-        zz = b.z[k] + (f->z);
+        q[0] = b.x[k] + (f->x);
+        q[1] = b.y[k] + (f->y);
+        q[2] = b.z[k] + (f->z);
 
-        r2 = xx*xx + yy*yy + zz*zz;
-        rad = sqrt(r2);
-        tsrad = GMs/(rad+rs)/(rad+rs)/rad;
+        (*gf)(*tnow, parvec, q, &grad[0])
 
-        b.ax[k] = b.ax[k] - strength*tsrad*xx;
-        b.ay[k] = b.ay[k] - strength*tsrad*yy;
-        b.az[k] = b.az[k] - strength*tsrad*zz;
+        // r2 = xx*xx + yy*yy + zz*zz;
+        // rad = sqrt(r2);
+        // tsrad = GMs/(rad+rs)/(rad+rs)/rad;
+
+        b.ax[k] = b.ax[k] - strength*grad[0];
+        b.ay[k] = b.ay[k] - strength*grad[1];
+        b.az[k] = b.az[k] - strength*grad[2];
 
         // if (k == 0) {
         //     // printf("%e\n", strength*tsrad*b.x[k]);
@@ -388,7 +395,8 @@ void accp_external(Config config, Bodies b, COMFrame *f, double strength) {
 }
 
 void acc_pot(Config config, Bodies b, Placeholders p, COMFrame *f,
-             double extern_strength, int *firstc) {
+             valuefunc vf, gradientfunc gf, double *parvec,
+             double extern_strength, double *tnow, int *firstc) {
     /*
     Compute the total acceleration and potential energy for each N body.
 
@@ -413,7 +421,7 @@ void acc_pot(Config config, Bodies b, Placeholders p, COMFrame *f,
 
     if (config.selfgravitating) {
         accp_bfe(config, b, p, firstc);
-        accp_external(config, b, f, extern_strength);
+        accp_external(config, b, f, vf, gf, parvec, extern_strength, tnow);
     } else {
         for (k=0; k<config.n_bodies; k++) {
             b.ax[k] = 0.;
@@ -421,7 +429,7 @@ void acc_pot(Config config, Bodies b, Placeholders p, COMFrame *f,
             b.az[k] = 0.;
             b.pot[k] = 0.;
         }
-        accp_external(config, b, f, extern_strength);
+        accp_external(config, b, f, vf, gf, parvec, extern_strength, tnow);
     }
 
 }
