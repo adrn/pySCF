@@ -14,3 +14,4 @@ from ._astropy_init import *
 if not _ASTROPY_SETUP_:
     # from example_mod import *
     from .scf import run_scf
+    from .core import SCFSimulation
