@@ -373,24 +373,34 @@ void accp_external(Config config, Bodies b, COMFrame *f,
 
     for (k=0; k<config.n_bodies; k++) {
         // THIS IS JUST HERNQUIST
-        q[0] = b.x[k] + (f->x);
-        q[1] = b.y[k] + (f->y);
-        q[2] = b.z[k] + (f->z);
+        q[0] = (b.x[k] + (f->x));
+        q[1] = (b.y[k] + (f->y));
+        q[2] = (b.z[k] + (f->z));
 
-        (*gf)(*tnow, parvec, q, &grad[0])
+        // OLD
+        // xx = (b.x[k] + (f->x));
+        // yy = (b.y[k] + (f->y));
+        // zz = (b.z[k] + (f->z));
 
+        // TODO: how do i resolve units issues???
+        (*gf)(*tnow, parvec, q, &grad[0]);
+
+        // OLD
         // r2 = xx*xx + yy*yy + zz*zz;
         // rad = sqrt(r2);
         // tsrad = GMs/(rad+rs)/(rad+rs)/rad;
+        // printf("%f %f\n", tsrad*xx, grad[0]*config.vu*config.vu/config.ru);
+        // printf("%f %f\n", tsrad*yy, grad[1]*config.vu*config.vu/config.ru);
+        // printf("%f %f\n", tsrad*zz, grad[2]*config.vu*config.vu/config.ru);
+        // exit(0);
+        // b.ax[k] = b.ax[k] - strength*tsrad*xx;
+        // b.ay[k] = b.ay[k] - strength*tsrad*yy;
+        // b.az[k] = b.az[k] - strength*tsrad*zz;
 
-        b.ax[k] = b.ax[k] - strength*grad[0];
-        b.ay[k] = b.ay[k] - strength*grad[1];
-        b.az[k] = b.az[k] - strength*grad[2];
-
-        // if (k == 0) {
-        //     // printf("%e\n", strength*tsrad*b.x[k]);
-        //     printf("DERP %e %e %e\n", rad, strength, tsrad);
-        // }
+        // NEW
+        b.ax[k] = b.ax[k] - strength*grad[0];//*config.vu*config.vu/config.ru;
+        b.ay[k] = b.ay[k] - strength*grad[1];//*config.vu*config.vu/config.ru;
+        b.az[k] = b.az[k] - strength*grad[2];//*config.vu*config.vu/config.ru;
     }
 }
 
@@ -506,8 +516,8 @@ void frame(int iter, Config config, Bodies b, COMFrame *f) {
 
 }
 
-void check_progenitor(int iter, Config config, Bodies b, Placeholders p,
-                      COMFrame *f, double *tnow) {
+void check_progenitor(int iter, Config config, Bodies b, Placeholders p, COMFrame *f,
+                      valuefunc vf, gradientfunc gf, double *parvec, double *tnow) {
     /*
     Iteratively determine which bodies are still bound to the progenitor
     and determine whether it is still self-gravitating.
@@ -565,7 +575,9 @@ void check_progenitor(int iter, Config config, Bodies b, Placeholders p,
         }
 
         // Find new accelerations with unbound stuff removed
-        acc_pot(config, b, p, f, 1., &not_firstc);
+        acc_pot(config, b, p, f,
+                vf, gf, parvec,
+                1., tnow, &not_firstc);
     }
 
     // if the loop above didn't break, progenitor is dissolved?
@@ -577,6 +589,7 @@ void check_progenitor(int iter, Config config, Bodies b, Placeholders p,
 }
 
 void tidal_start(int iter, Config config, Bodies b, Placeholders p, COMFrame *f,
+                 valuefunc vf, gradientfunc gf, double *parvec,
                  double *tnow, double *tpos, double *tvel) {
     double v_cm[3], a_cm[3], mtot, t_tidal, strength;
     int i,k;
@@ -625,7 +638,8 @@ void tidal_start(int iter, Config config, Bodies b, Placeholders p, COMFrame *f,
     strength = (-2.*t_tidal + 3.)*t_tidal*t_tidal;
 
     // Find new accelerations
-    acc_pot(config, b, p, f, strength, &not_firstc);
+    acc_pot(config, b, p, f, vf, gf, parvec,
+            strength, tnow, &not_firstc);
 
     // Advance velocity by one step
     step_vel(config, b, config.dt, tnow, tvel);
@@ -636,14 +650,16 @@ void tidal_start(int iter, Config config, Bodies b, Placeholders p, COMFrame *f,
     *tnow = 0.;
 }
 
-void step_system(int iter, Config config, Bodies b, Placeholders p,
-                 COMFrame *f, double *tnow, double *tpos, double *tvel) {
+void step_system(int iter, Config config, Bodies b, Placeholders p, COMFrame *f,
+                 valuefunc vf, gradientfunc gf, double *parvec,
+                 double *tnow, double *tpos, double *tvel) {
 
     int not_firstc = 0;
     double strength = 1.;
 
     step_pos(config, b, config.dt, tnow, tpos);
     frame(iter, config, b, f);
-    acc_pot(config, b, p, f, strength, &not_firstc);
+    acc_pot(config, b, p, f, vf, gf, parvec,
+            strength, tnow, &not_firstc);
     step_vel(config, b, config.dt, tnow, tvel);
 }
