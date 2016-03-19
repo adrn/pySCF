@@ -4,16 +4,20 @@ __author__ = "adrn <adrn@astro.columbia.edu>"
 
 # Standard library
 import os
-import sys
 
 # Third-party
-from astropy import log as logger
+from astropy.constants import G
 import astropy.units as u
 import numpy as np
-import h5py
+
+import gary.dynamics as gd
+import gary.potential as gp
+from gary.units import UnitSystem
 
 # Project
 from .scf import run_scf
+
+__all__ = ['SCFSimulation']
 
 class SCFSimulation(object):
     """
@@ -72,6 +76,19 @@ class SCFSimulation(object):
 
         self.output_file = os.path.join(output_path, snapshot_filename)
 
+        # define unit system for simulation
+        l_unit = u.Unit('{} kpc'.format(self.length_scale.to(u.kpc).value))
+        m_unit = u.Unit('{} Msun'.format(self.mass_scale.to(u.Msun).value))
+        _G = G.decompose(bases=[u.kpc,u.M_sun,u.Myr]).value
+        t_unit = u.Unit("{:08f} Myr".format(np.sqrt(l_unit.scale**3 / (_G*m_unit.scale))))
+        a_unit = u.radian
+        self.units = UnitSystem(l_unit, m_unit, t_unit, a_unit)
+
+        # transform potential to simulation units
+        self.potential = potential
+        Potential = self.potential.__class__
+        self._potential = Potential(units=self.units, **self.potential.parameters)
+
     def run(self, w0, dt, n_steps, t0=0.,
             n_snapshot=None, n_recenter=256, n_tidal=256):
         """
@@ -110,7 +127,8 @@ class SCFSimulation(object):
         if n_tidal < 0:
             raise ValueError("n_tidal must be >= 0")
 
-        run_scf(w0, self.bodies, self.mass_scale, self.length_scale,
+        run_scf(self._potential.c_instance, w0, self.bodies,
+                self.mass_scale, self.length_scale,
                 dt, n_steps, t0,
                 n_snapshot=n_snapshot, n_recenter=n_recenter, n_tidal=n_tidal,
                 nmax=self.nmax, lmax=self.lmax,
