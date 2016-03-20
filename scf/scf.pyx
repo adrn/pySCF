@@ -397,6 +397,7 @@ def run_scf(_CPotential cpotential,
 
         if config.n_snapshot > 0 and (((i+1) % config.n_snapshot) == 0 and i > 0):
             step_vel(config, b, -0.5*config.dt, &tnow, &tvel)
+            check_progenitor(i, config, b, p, &f, vf, gf, parvec, &tnow)
             write_snap(output_file, i+1, j, t=tnow,
                        pos=np.vstack((np.array(x)+f.x, np.array(y)+f.y, np.array(z)+f.z)),
                        vel=np.vstack((np.array(vx), np.array(vy), np.array(vz))),
