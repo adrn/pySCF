@@ -3,9 +3,11 @@
 #include "gsl/gsl_sf_gegenbauer.h"
 #include <math.h>
 #include <Python.h>
-#include "gary/potential/cpotential.h"
+#include "src/cpotential.h" // from gary/potential
 #include "helpers.h"
 #include "scf.h"
+
+// TODO: maybe the energy leakage is because of a missing sqrt(4pi) like in Biff??
 
 void accp_firstc(Config config, Placeholders p) {
     /*
@@ -360,8 +362,7 @@ void accp_bfe(Config config, Bodies b, Placeholders p, int *firstc) {
 // TODO: this should take function pointers to evaluate the potential, acceleration
 //       of the external potential, and a pointer to a parameter struct
 void accp_external(Config config, Bodies b, COMFrame *f,
-                   valuefunc vf, gradientfunc gf, double *parvec,
-                   double strength, double *tnow) {
+                   CPotential *pot, double strength, double *tnow) {
 
     // double rs = 10./config.ru;
     // double vcirc2 = 220.*220./config.vu/config.vu;
@@ -383,7 +384,8 @@ void accp_external(Config config, Bodies b, COMFrame *f,
         // zz = (b.z[k] + (f->z));
 
         // TODO: how do i resolve units issues???
-        (*gf)(*tnow, parvec, q, &grad[0]);
+        // (*gf)(*tnow, parvec, q, &grad[0]);
+        c_gradient(pot, *tnow, &q[0], &grad[0]);
 
         // OLD
         // r2 = xx*xx + yy*yy + zz*zz;
@@ -405,8 +407,7 @@ void accp_external(Config config, Bodies b, COMFrame *f,
 }
 
 void acc_pot(Config config, Bodies b, Placeholders p, COMFrame *f,
-             valuefunc vf, gradientfunc gf, double *parvec,
-             double extern_strength, double *tnow, int *firstc) {
+             CPotential *pot, double extern_strength, double *tnow, int *firstc) {
     /*
     Compute the total acceleration and potential energy for each N body.
 
@@ -431,7 +432,7 @@ void acc_pot(Config config, Bodies b, Placeholders p, COMFrame *f,
 
     if (config.selfgravitating) {
         accp_bfe(config, b, p, firstc);
-        accp_external(config, b, f, vf, gf, parvec, extern_strength, tnow);
+        accp_external(config, b, f, pot, extern_strength, tnow);
     } else {
         for (k=0; k<config.n_bodies; k++) {
             b.ax[k] = 0.;
@@ -439,7 +440,7 @@ void acc_pot(Config config, Bodies b, Placeholders p, COMFrame *f,
             b.az[k] = 0.;
             b.pot[k] = 0.;
         }
-        accp_external(config, b, f, vf, gf, parvec, extern_strength, tnow);
+        accp_external(config, b, f, pot, extern_strength, tnow);
     }
 
 }
@@ -517,7 +518,7 @@ void frame(int iter, Config config, Bodies b, COMFrame *f) {
 }
 
 void check_progenitor(int iter, Config config, Bodies b, Placeholders p, COMFrame *f,
-                      valuefunc vf, gradientfunc gf, double *parvec, double *tnow) {
+                      CPotential *pot, double *tnow) {
     /*
     Iteratively determine which bodies are still bound to the progenitor
     and determine whether it is still self-gravitating.
@@ -560,7 +561,7 @@ void check_progenitor(int iter, Config config, Bodies b, Placeholders p, COMFram
 
         for (k=0; k<config.n_bodies; k++) {
             if (b.kin[k] > fabs(b.pot[k])) {
-                printf("unbound %d\n", k+1);
+                // printf("unbound %d\n", k+1);
                 b.ibound[k] = 0;
                 if (b.tub[k] == 0) b.tub[k] = *tnow;
             } else {
@@ -576,8 +577,7 @@ void check_progenitor(int iter, Config config, Bodies b, Placeholders p, COMFram
 
         // Find new accelerations with unbound stuff removed
         acc_pot(config, b, p, f,
-                vf, gf, parvec,
-                1., tnow, &not_firstc);
+                pot, 1., tnow, &not_firstc);
     }
 
     // if the loop above didn't break, progenitor is dissolved?
@@ -589,8 +589,7 @@ void check_progenitor(int iter, Config config, Bodies b, Placeholders p, COMFram
 }
 
 void tidal_start(int iter, Config config, Bodies b, Placeholders p, COMFrame *f,
-                 valuefunc vf, gradientfunc gf, double *parvec,
-                 double *tnow, double *tpos, double *tvel) {
+                 CPotential *pot, double *tnow, double *tpos, double *tvel) {
     double v_cm[3], a_cm[3], mtot, t_tidal, strength;
     int i,k;
     int not_firstc = 0;
@@ -638,7 +637,7 @@ void tidal_start(int iter, Config config, Bodies b, Placeholders p, COMFrame *f,
     strength = (-2.*t_tidal + 3.)*t_tidal*t_tidal;
 
     // Find new accelerations
-    acc_pot(config, b, p, f, vf, gf, parvec,
+    acc_pot(config, b, p, f, pot,
             strength, tnow, &not_firstc);
 
     // Advance velocity by one step
@@ -651,15 +650,14 @@ void tidal_start(int iter, Config config, Bodies b, Placeholders p, COMFrame *f,
 }
 
 void step_system(int iter, Config config, Bodies b, Placeholders p, COMFrame *f,
-                 valuefunc vf, gradientfunc gf, double *parvec,
-                 double *tnow, double *tpos, double *tvel) {
+                 CPotential *pot, double *tnow, double *tpos, double *tvel) {
 
     int not_firstc = 0;
     double strength = 1.;
 
     step_pos(config, b, config.dt, tnow, tpos);
     frame(iter, config, b, f);
-    acc_pot(config, b, p, f, vf, gf, parvec,
+    acc_pot(config, b, p, f, pot,
             strength, tnow, &not_firstc);
     step_vel(config, b, config.dt, tnow, tvel);
 }

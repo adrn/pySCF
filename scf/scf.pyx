@@ -25,10 +25,16 @@ import cython
 cimport cython
 from cpython.exc cimport PyErr_CheckSignals
 
-from gary.potential.cpotential cimport _CPotential, valuefunc, gradientfunc
+# from gary.potential.cpotential cimport _CPotential, valuefunc, gradientfunc
+from gary.potential.cpotential cimport CPotentialWrapper
+from gary.potential.cpotential import CPotentialBase
 
 cdef extern from "math.h":
     double sqrt(double)
+
+cdef extern from "src/cpotential.h":
+    ctypedef struct CPotential:
+        pass
 
 cdef extern from "src/scf.h":
     ctypedef struct Config:
@@ -94,8 +100,8 @@ cdef extern from "src/scf.h":
         int *pot_idx
 
     void acc_pot(Config config, Bodies b, Placeholders p, COMFrame *f,
-                 valuefunc vf, gradientfunc gf, double *parvec,
-                 double extern_strength, double *tnow, int *firstc) nogil
+                 CPotential *pot, double extern_strength, double *tnow,
+                 int *firstc) nogil
 
     void frame(int iter, Config config, Bodies b, COMFrame *f) nogil
 
@@ -105,16 +111,16 @@ cdef extern from "src/scf.h":
     void step_pos(Config config, Bodies b, double dt,
                   double *tnow, double *tvel) nogil
 
-    void tidal_start(int iter, Config config, Bodies b, Placeholders p, COMFrame *f,
-                     valuefunc vf, gradientfunc gf, double *parvec,
+    void tidal_start(int iter, Config config, Bodies b, Placeholders p,
+                     COMFrame *f, CPotential *pot,
                      double *tnow, double *tpos, double *tvel) nogil
 
-    void step_system(int iter, Config config, Bodies b, Placeholders p, COMFrame *f,
-                     valuefunc vf, gradientfunc gf, double *parvec,
+    void step_system(int iter, Config config, Bodies b, Placeholders p,
+                     COMFrame *f, CPotential *pot,
                      double *tnow, double *tpos, double *tvel) nogil
 
-    void check_progenitor(int iter, Config config, Bodies b, Placeholders p, COMFrame *f,
-                          valuefunc vf, gradientfunc gf, double *parvec, double *tnow) nogil
+    void check_progenitor(int iter, Config config, Bodies b, Placeholders p,
+                          COMFrame *f, CPotential *pot, double *tnow) nogil
 
 # needed for some reason
 cdef extern from "src/helpers.h":
@@ -136,7 +142,7 @@ def write_snap(output_file, i, j, t, pos, vel, tub):
 
 # TODO: WAT DO ABOUT POTENTIAL!?!
 # TODO: is there some bug with the first snapshot output being offset in velocity?
-def run_scf(_CPotential cpotential,
+def run_scf(CPotentialWrapper cp,
             w0, bodies, mass_scale, length_scale,
             dt, n_steps, t0, n_snapshot, n_recenter, n_tidal,
             nmax, lmax, zero_odd, zero_even, self_gravity,
@@ -208,10 +214,6 @@ def run_scf(_CPotential cpotential,
         # frame position, velocity at all times
         double[:,::1] frame_xyz = np.zeros((3,n_steps+1))
         double[:,::1] frame_vxyz = np.zeros((3,n_steps+1))
-
-        valuefunc vf = cpotential.c_value
-        gradientfunc gf = cpotential.c_gradient
-        double *parvec = &(cpotential._parameters[0])
 
     if os.path.exists(output_file):
         raise ValueError("Output file '{}' already exists.".format(output_file))
@@ -341,7 +343,7 @@ def run_scf(_CPotential cpotential,
         vy[i] = vy[i] + f.vy
         vz[i] = vz[i] + f.vz
 
-    acc_pot(config, b, p, &f, vf, gf, parvec, extern_strength, &tnow, &firstc)
+    acc_pot(config, b, p, &f, &(cp.cpotential), extern_strength, &tnow, &firstc)
     frame(0, config, b, &f)
 
     # initialize velocities (take a half step in time)
@@ -355,13 +357,13 @@ def run_scf(_CPotential cpotential,
     for i in range(config.n_tidal):
         PyErr_CheckSignals()
         tidal_start(i, config, b, p, &f,
-                    vf, gf, parvec, &tnow, &tpos, &tvel)
+                    &(cp.cpotential), &tnow, &tpos, &tvel)
         logger.debug("Tidal start: {}".format(i+1));
 
     # Synchronize the velocities with the positions
     step_vel(config, b, -0.5*config.dt, &tnow, &tvel)
     frame(0, config, b, &f)
-    check_progenitor(0, config, b, p, &f, vf, gf, parvec, &tnow)
+    check_progenitor(0, config, b, p, &f, &(cp.cpotential), &tnow)
 
     # write initial positions out
     write_snap(output_file, i=0, j=0, t=tnow,
@@ -385,7 +387,7 @@ def run_scf(_CPotential cpotential,
     last_t = 0.
     for i in range(config.n_steps):
         PyErr_CheckSignals()
-        step_system(i, config, b, p, &f, vf, gf, parvec, &tnow, &tpos, &tvel)
+        step_system(i, config, b, p, &f, &(cp.cpotential), &tnow, &tpos, &tvel)
         logger.debug("Step: {}".format(i+1));
 
         frame_xyz[0,i+1] = f.x
@@ -397,7 +399,7 @@ def run_scf(_CPotential cpotential,
 
         if config.n_snapshot > 0 and (((i+1) % config.n_snapshot) == 0 and i > 0):
             step_vel(config, b, -0.5*config.dt, &tnow, &tvel)
-            check_progenitor(i, config, b, p, &f, vf, gf, parvec, &tnow)
+            check_progenitor(i, config, b, p, &f, &(cp.cpotential), &tnow)
             write_snap(output_file, i+1, j, t=tnow,
                        pos=np.vstack((np.array(x)+f.x, np.array(y)+f.y, np.array(z)+f.z)),
                        vel=np.vstack((np.array(vx), np.array(vy), np.array(vz))),
