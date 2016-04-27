@@ -231,6 +231,7 @@ cpdef _test_accp_bfe(bodies):
     config.lmax = lmax
     config.zeroodd = 0
     config.zeroeven = 0
+    config.G = 1.
 
     # The N bodies
     b.x = &x[0]
@@ -274,4 +275,8 @@ cpdef _test_accp_bfe(bodies):
         'plm': plm,
         'ultrasp': ultrasp,
         'ultraspt': ultraspt,
+        'ax': ax,
+        'ay': ay,
+        'az': az,
+        'pot': pot,
     }

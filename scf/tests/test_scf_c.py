@@ -77,3 +77,9 @@ def test_accp_bfe():
     for n,l,ultrasp,ultraspt in f77_tbl:
         assert np.allclose(ultrasp, d['ultrasp'][n,l])
         assert np.allclose(ultraspt, d['ultraspt'][n,l])
+
+    # acceleration and potential at position of bodies
+    f77_tbl = ascii.read(get_pkg_data_filename('data/accp_bfe.txt'))
+    for n,f77_row in enumerate(f77_tbl):
+        np.allclose(np.array(list(f77_row)),
+                    [d['ax'][n], d['ay'][n], d['az'][n], d['pot'][n]])
