@@ -52,7 +52,7 @@ class SCFSimulation(object):
     @u.quantity_input(mass_scale=u.Msun, length_scale=u.kpc)
     def __init__(self, bodies, potential, mass_scale, length_scale,
                  self_gravity=True, nmax=6, lmax=4, zero_odd=False, zero_even=False,
-                 output_path=None, snapshot_filename="snap.h5"):
+                 output_path=None):
 
         if not isinstance(bodies, gd.CartesianPhaseSpacePosition):
             raise ValueError("bodies must be a CartesianPhaseSpacePosition instance.")
@@ -74,7 +74,7 @@ class SCFSimulation(object):
         if output_path is None:
             output_path = os.getcwd()
 
-        self.output_file = os.path.join(output_path, snapshot_filename)
+        self.output_path = os.path.abspath(output_path)
 
         # define unit system for simulation
         l_unit = u.Unit('{} kpc'.format(self.length_scale.to(u.kpc).value))
@@ -89,8 +89,10 @@ class SCFSimulation(object):
         Potential = self.potential.__class__
         self._potential = Potential(units=self.units, **self.potential.parameters)
 
+    # @u.quantity_input(dt=u.Myr)
     def run(self, w0, dt, n_steps, t0=0.,
-            n_snapshot=None, n_recenter=256, n_tidal=256):
+            n_snapshot=None, n_recenter=256, n_tidal=256,
+            snapshot_filename="scfoutput.h5", overwrite=False):
         """
         Run the N-body simulation.
 
@@ -112,6 +114,10 @@ class SCFSimulation(object):
             How often to adjust the center of mass.
         n_tidal : int (optional)
             Number of steps to slowly turn on the external tidal field.
+        snapshot_filename : str (optional)
+            Name of the file to store simulation snapshots.
+        overwrite : bool (optional)
+            Overwrite existing file.
 
         """
         if not isinstance(w0, gd.CartesianPhaseSpacePosition):
@@ -127,10 +133,14 @@ class SCFSimulation(object):
         if n_tidal < 0:
             raise ValueError("n_tidal must be >= 0")
 
+        output_file = os.path.join(self.output_path, snapshot_filename)
+        if os.path.exists(output_file) and overwrite:
+            os.remove(output_file)
+
         run_scf(self._potential.c_instance, w0, self.bodies,
                 self.mass_scale, self.length_scale,
                 dt, n_steps, t0,
                 n_snapshot=n_snapshot, n_recenter=n_recenter, n_tidal=n_tidal,
                 nmax=self.nmax, lmax=self.lmax,
                 zero_odd=self.zero_odd, zero_even=self.zero_even,
-                self_gravity=self.self_gravity, output_file=self.output_file)
+                self_gravity=self.self_gravity, output_file=output_file)
