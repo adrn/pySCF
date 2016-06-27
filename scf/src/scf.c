@@ -7,8 +7,6 @@
 #include "helpers.h"
 #include "scf.h"
 
-// TODO: maybe the energy leakage is because of a missing sqrt(4pi) like in Biff??
-
 void accp_firstc(Config config, Placeholders p) {
     /*
     This code follows the "if (firstc)" block of the original Fortran
@@ -93,39 +91,14 @@ void accp_bfe(Config config, Bodies b, Placeholders p, int *firstc) {
     double temp3, temp4, temp5, temp6, ttemp5;
     double ar, ath, aphi, cosp, sinp, phinltil, sinth;
     double clm, dlm, elm, flm;
-
-    // TODO: should I define all of this outside?
     int lmax = config.lmax;
     int nmax = config.nmax;
     double cosmphi[lmax+1], sinmphi[lmax+1];
-
-    // printf("firstc %d\n", *firstc);
-    // printf("lmin lskip %d %d\n", *lmin, *lskip);
 
     if (*firstc) {
         accp_firstc(config, p);
         *firstc = 0;
     }
-    // printf("firstc %d\n", *firstc);
-    // printf("lmin lskip %d %d\n", *lmin, *lskip);
-
-    // printf("dblfact %f %f %f %f\n", dblfact[1], dblfact[2], dblfact[3], dblfact[4]);
-    // printf("twoalpha %f %f %f %f %f %f\n", twoalpha[0], twoalpha[1],
-    //        twoalpha[2], twoalpha[3], twoalpha[4], twoalpha[5]);
-    // printf("anltilde %f %f %f %f\n", anltilde[getIndex2D(0,0,lmax+1)],
-    //        anltilde[getIndex2D(0,1,lmax+1)], anltilde[getIndex2D(3,2,lmax+1)],
-    //        anltilde[getIndex2D(5,4,lmax+1)]);
-    // printf("coeflm %f %f %f %f\n", coeflm[getIndex2D(0,0,lmax+1)],
-    //        coeflm[getIndex2D(0,1,lmax+1)], coeflm[getIndex2D(3,2,lmax+1)],
-    //        coeflm[getIndex2D(2,3,lmax+1)]);
-    // printf("c1 %f %f %f %f %f\n", c1[getIndex2D(1,1,lmax+1)],
-    //        c1[getIndex2D(1,2,lmax+1)], c1[getIndex2D(3,2,lmax+1)],
-    //        c1[getIndex2D(2,3,lmax+1)], c1[getIndex2D(5,4,lmax+1)]);
-    // printf("c2 %f %f %f %f %f\n", c2[getIndex2D(1,1,lmax+1)],
-    //        c2[getIndex2D(1,2,lmax+1)], c2[getIndex2D(3,2,lmax+1)],
-    //        c2[getIndex2D(2,3,lmax+1)], c2[getIndex2D(5,4,lmax+1)]);
-    // printf("c3 %f %f %f %f %f %f\n", c3[0], c3[1], c3[2], c3[3], c3[4], c3[5]);
-    // Note: I compared the above output with Fortran output and looks good.
 
     // zero out the coefficients
     for (l=0; l<=lmax; l++) {
@@ -153,8 +126,6 @@ void accp_bfe(Config config, Bodies b, Placeholders p, int *firstc) {
                 cosmphi[m] = cos(m*phi);
                 sinmphi[m] = sin(m*phi);
             }
-            // printf("cosmphi %f %f %f %f\n", cosmphi[0], cosmphi[1], cosmphi[2], cosmphi[3]);
-            // printf("sinmphi %f %f %f %f\n", sinmphi[0], sinmphi[1], sinmphi[2], sinmphi[3]);
 
             for (l=0; l<=lmax; l++) {
                 p.ultrasp[getIndex2D(0,l,lmax+1)] = 1.;
@@ -177,11 +148,6 @@ void accp_bfe(Config config, Bodies b, Placeholders p, int *firstc) {
                 }
             }
 
-            // printf("ultrasp %f %f %f %f %f\n", ultrasp[getIndex2D(0,0,lmax+1)], ultrasp[getIndex2D(1,0,lmax+1)],
-            // ultrasp[getIndex2D(1,3,lmax+1)], ultrasp[getIndex2D(3,1,lmax+1)], ultrasp[getIndex2D(4,4,lmax+1)]);
-            // printf("ultraspt %f %f %f %f %f\n", ultraspt[getIndex2D(0,0,lmax+1)], ultraspt[getIndex2D(1,0,lmax+1)],
-            //      ultraspt[getIndex2D(1,3,lmax+1)], ultraspt[getIndex2D(3,1,lmax+1)], ultraspt[getIndex2D(4,4,lmax+1)]);
-
             for (m=0; m<=lmax; m++) {
                 i1 = getIndex2D(m,m,lmax+1);
                 p.plm[i1] = 1.0;
@@ -199,8 +165,6 @@ void accp_bfe(Config config, Bodies b, Placeholders p, int *firstc) {
                     plm1m = p.plm[i2];
                 }
             }
-            // printf("plm %f %f %f %f %f\n", plm[getIndex2D(0,0,lmax+1)], plm[getIndex2D(1,0,lmax+1)],
-            //        plm[getIndex2D(1,3,lmax+1)], plm[getIndex2D(3,1,lmax+1)], plm[getIndex2D(4,4,lmax+1)]);
 
             for (l=(*(p.lmin)); l<=lmax; l=l+(*(p.lskip))) {
                 temp5 = pow(r,l) / pow(1.+r,2*l+1) * b.mass[k];
@@ -213,28 +177,13 @@ void accp_bfe(Config config, Bodies b, Placeholders p, int *firstc) {
                     temp4 = ttemp5 * cosmphi[m];
 
                     for (n=0; n<=nmax; n++) {
-                        i1 = getIndex3D(n,l,m,lmax+1,lmax+1);
-                        i2 = getIndex2D(n,l,lmax+1);
-                        p.sinsum[i1] = p.sinsum[i1] + temp3*p.ultraspt[i2];
-                        p.cossum[i1] = p.cossum[i1] + temp4*p.ultraspt[i2];
+                        i1 = getIndex2D(n,l,lmax+1);
+                        i2 = getIndex3D(n,l,m,lmax+1,lmax+1);
+                        p.sinsum[i2] = p.sinsum[i2] + temp3*p.ultraspt[i1];
+                        p.cossum[i2] = p.cossum[i2] + temp4*p.ultraspt[i1];
                     }
                 }
             }
-
-            // printf("sin %e %e %e %e %e %e\n",
-            //        sinsum[getIndex3D(0,0,0,lmax+1,lmax+1)],
-            //        sinsum[getIndex3D(0,1,1,lmax+1,lmax+1)],
-            //        sinsum[getIndex3D(0,0,2,lmax+1,lmax+1)],
-            //        sinsum[getIndex3D(0,3,1,lmax+1,lmax+1)],
-            //        sinsum[getIndex3D(1,2,4,lmax+1,lmax+1)],
-            //        sinsum[getIndex3D(3,0,0,lmax+1,lmax+1)]);
-            // printf("cos %e %e %e %e %e %e\n",
-            //        cossum[getIndex3D(0,0,0,lmax+1,lmax+1)],
-            //        cossum[getIndex3D(0,1,1,lmax+1,lmax+1)],
-            //        cossum[getIndex3D(0,0,2,lmax+1,lmax+1)],
-            //        cossum[getIndex3D(0,3,1,lmax+1,lmax+1)],
-            //        cossum[getIndex3D(1,2,4,lmax+1,lmax+1)],
-            //        cossum[getIndex3D(3,0,0,lmax+1,lmax+1)]);
         }
     }
 
@@ -252,7 +201,7 @@ void accp_bfe(Config config, Bodies b, Placeholders p, int *firstc) {
         }
 
         // Zero out potential and accelerations
-        b.pot[k] = 0.;
+        b.Epot_bfe[k] = 0.;
         ar = 0.;
         ath = 0.;
         aphi = 0.;
@@ -322,6 +271,7 @@ void accp_bfe(Config config, Bodies b, Placeholders p, int *firstc) {
                 for (n=0; n<=nmax; n++) {
                     i1 = getIndex2D(n,l,lmax+1);
                     i2 = getIndex3D(n,l,m,lmax+1,lmax+1);
+
                     clm = clm + p.ultrasp[i1]*p.cossum[i2];
                     dlm = dlm + p.ultrasp[i1]*p.sinsum[i2];
                     elm = elm + p.ultrasp1[i1]*p.cossum[i2];
@@ -331,14 +281,12 @@ void accp_bfe(Config config, Bodies b, Placeholders p, int *firstc) {
                 i1 = getIndex2D(l,m,lmax+1);
                 temp3 = temp3 + p.plm[i1]*(clm*cosmphi[m]+dlm*sinmphi[m]);
                 temp4 = temp4 - p.plm[i1]*(elm*cosmphi[m]+flm*sinmphi[m]);
-                // printf("temp4 %e %e %e %d %d %d\n", temp4, elm, flm, n, l, m);
                 temp5 = temp5 - p.dplm[i1]*(clm*cosmphi[m]+dlm*sinmphi[m]);
-                // printf("temp5 %e %e %e %e %d %d %d\n", temp5, p.dplm[i1], clm, dlm, n, l, m);
                 temp6 = temp6 - m*p.plm[i1]*(dlm*cosmphi[m]-clm*sinmphi[m]);
             }
 
             phinltil = pow(r,l) / pow(1.+r, 2*l+1);
-            b.pot[k] = b.pot[k] + temp3*phinltil;
+            b.Epot_bfe[k] = b.Epot_bfe[k] + temp3*phinltil;
             ar = ar + phinltil*(-temp3*(l/r-(2.*l+1.)/(1.+r)) + temp4*4.*(2.*l+1.5)/pow(1.+r,2));
             ath = ath + temp5*phinltil;
             aphi = aphi + temp6*phinltil;
@@ -354,7 +302,7 @@ void accp_bfe(Config config, Bodies b, Placeholders p, int *firstc) {
         b.ax[k] = config.G*(sinth*cosp*ar + costh*cosp*ath - sinp*aphi);
         b.ay[k] = config.G*(sinth*sinp*ar + costh*sinp*ath + cosp*aphi);
         b.az[k] = config.G*(costh*ar - sinth*ath);
-        b.pot[k] = b.pot[k]*config.G;
+        b.Epot_bfe[k] = b.Epot_bfe[k]*config.G;
     }
 
 }
@@ -386,23 +334,12 @@ void accp_external(Config config, Bodies b, COMFrame *f,
         // TODO: how do i resolve units issues???
         // (*gf)(*tnow, parvec, q, &grad[0]);
         c_gradient(pot, *tnow, &q[0], &grad[0]);
-
-        // OLD
-        // r2 = xx*xx + yy*yy + zz*zz;
-        // rad = sqrt(r2);
-        // tsrad = GMs/(rad+rs)/(rad+rs)/rad;
-        // printf("%f %f\n", tsrad*xx, grad[0]*config.vu*config.vu/config.ru);
-        // printf("%f %f\n", tsrad*yy, grad[1]*config.vu*config.vu/config.ru);
-        // printf("%f %f\n", tsrad*zz, grad[2]*config.vu*config.vu/config.ru);
-        // exit(0);
-        // b.ax[k] = b.ax[k] - strength*tsrad*xx;
-        // b.ay[k] = b.ay[k] - strength*tsrad*yy;
-        // b.az[k] = b.az[k] - strength*tsrad*zz;
+        b.Epot_ext[k] = c_value(pot, *tnow, &q[0]);
 
         // NEW
-        b.ax[k] = b.ax[k] - strength*grad[0];//*config.vu*config.vu/config.ru;
-        b.ay[k] = b.ay[k] - strength*grad[1];//*config.vu*config.vu/config.ru;
-        b.az[k] = b.az[k] - strength*grad[2];//*config.vu*config.vu/config.ru;
+        b.ax[k] = b.ax[k] - strength*grad[0];
+        b.ay[k] = b.ay[k] - strength*grad[1];
+        b.az[k] = b.az[k] - strength*grad[2];
     }
 }
 
@@ -438,7 +375,8 @@ void acc_pot(Config config, Bodies b, Placeholders p, COMFrame *f,
             b.ax[k] = 0.;
             b.ay[k] = 0.;
             b.az[k] = 0.;
-            b.pot[k] = 0.;
+            b.Epot_ext[k] = 0.;
+            b.Epot_bfe[k] = 0.;
         }
         accp_external(config, b, f, pot, extern_strength, tnow);
     }
@@ -474,9 +412,13 @@ void frame(int iter, Config config, Bodies b, COMFrame *f) {
     xyz_min[1] = 0.;
     xyz_min[2] = 0.;
 
-    if ((iter == 0) || ((iter % config.n_recenter) == 0)) {
-        indexx(config.n_bodies, b.pot, (f->pot_idx));
-    }
+    // if ((iter == 0) || ((iter % config.n_recenter) == 0)) {
+    //     indexx(config.n_bodies, b.pot, (f->pot_idx));
+    // }
+
+    // for (i=0; i<=6; i++) {
+    //     printf("rank %d %d %.14e\n", i, (f->pot_idx)[i], b.pot[(f->pot_idx)[i]]);
+    // }
 
     for (i=0; i<nend; i++) {
         k = (f->pot_idx)[i];
@@ -500,20 +442,23 @@ void frame(int iter, Config config, Bodies b, COMFrame *f) {
         b.y[k] = b.y[k] - xyz_min[1];
         b.z[k] = b.z[k] - xyz_min[2];
     }
-
-    // find velocity frame
-    (f->vx) = 0.;
-    (f->vy) = 0.;
-    (f->vz) = 0.;
-    for (i=0; i<nend; i++) {
-        k = (f->pot_idx)[i];
-        (f->vx) = (f->vx) + b.mass[k]*b.vx[k];
-        (f->vy) = (f->vy) + b.mass[k]*b.vy[k];
-        (f->vz) = (f->vz) + b.mass[k]*b.vz[k];
+    if ( (((iter) % config.n_snapshot) == 0) || (iter == 0) ) {
+        // printf("%d %d %d\n", iter, config.n_snapshot, iter % config.n_snapshot);
+        // find velocity frame
+        (f->vx) = 0.;
+        (f->vy) = 0.;
+        (f->vz) = 0.;
+        for (i=0; i<nend; i++) {
+            k = (f->pot_idx)[i];
+            // printf("%d\n", k);
+            (f->vx) = (f->vx) + b.mass[k]*b.vx[k];
+            (f->vy) = (f->vy) + b.mass[k]*b.vy[k];
+            (f->vz) = (f->vz) + b.mass[k]*b.vz[k];
+        }
+        (f->vx) = (f->vx) / mred;
+        (f->vy) = (f->vy) / mred;
+        (f->vz) = (f->vz) / mred;
     }
-    (f->vx) = (f->vx) / mred;
-    (f->vy) = (f->vy) / mred;
-    (f->vz) = (f->vz) / mred;
 
 }
 
@@ -522,6 +467,8 @@ void check_progenitor(int iter, Config config, Bodies b, Placeholders p, COMFram
     /*
     Iteratively determine which bodies are still bound to the progenitor
     and determine whether it is still self-gravitating.
+
+    Roughly equivalent to 'findrem' in Fortran.
 
     Parameters
     ----------
@@ -547,11 +494,18 @@ void check_progenitor(int iter, Config config, Bodies b, Placeholders p, COMFram
     int not_firstc = 0;
     int broke = 0;
 
+    m_prog = 10000000000.;
+
     for (k=0; k<config.n_bodies; k++) {
         vx_rel = b.vx[k] - (f->vx);
         vy_rel = b.vy[k] - (f->vy);
         vz_rel = b.vz[k] - (f->vz);
-        b.kin[k] = 0.5*(vx_rel*vx_rel + vy_rel*vy_rel + vz_rel*vz_rel);
+
+        p.kin0[k] = 0.5*(vx_rel*vx_rel + vy_rel*vy_rel + vz_rel*vz_rel); // relative
+        p.pot0[k] = b.Epot_bfe[k]; // potential energy in satellite
+        p.ax0[k] = b.ax[k];
+        p.ay0[k] = b.ay[k];
+        p.az0[k] = b.az[k];
     }
 
     // iteratively shave off unbound particles to find prog. mass
@@ -560,8 +514,8 @@ void check_progenitor(int iter, Config config, Bodies b, Placeholders p, COMFram
         m_prog = 0.;
 
         for (k=0; k<config.n_bodies; k++) {
-            if (b.kin[k] > fabs(b.pot[k])) {
-                // printf("unbound %d\n", k+1);
+            if (p.kin0[k] > fabs(b.Epot_bfe[k])) { // relative kinetic energy > potential
+                // printf("unbound %d %.8e %.8e\n", k+1, b.kin[k], b.pot[k]);
                 b.ibound[k] = 0;
                 if (b.tub[k] == 0) b.tub[k] = *tnow;
             } else {
@@ -569,7 +523,6 @@ void check_progenitor(int iter, Config config, Bodies b, Placeholders p, COMFram
             }
         }
 
-        // printf("msafe prog %f %f\n", m_safe, m_prog);
         if (m_safe <= m_prog) {
             broke = 1;
             break;
@@ -583,8 +536,15 @@ void check_progenitor(int iter, Config config, Bodies b, Placeholders p, COMFram
     // if the loop above didn't break, progenitor is dissolved?
     if (broke == 0) m_prog = 0.;
 
-    // printf("Found progenitor mass (%d iter): %f\n", n, m_prog);
+    for (k=0; k<config.n_bodies; k++) {
+        b.Epot_bfe[k] = p.pot0[k];
+        b.ax[k] = p.ax0[k];
+        b.ay[k] = p.ay0[k];
+        b.az[k] = p.az0[k];
+    }
+
     if (m_prog == 0) config.selfgravitating = 0;
+    (f->m_prog) = m_prog;
 
 }
 
@@ -593,6 +553,8 @@ void tidal_start(int iter, Config config, Bodies b, Placeholders p, COMFrame *f,
     double v_cm[3], a_cm[3], mtot, t_tidal, strength;
     int i,k;
     int not_firstc = 0;
+
+    // printf("v100 %d %.14f %.14f %.14f\n", iter, b.vx[100], b.vy[100], b.vz[100]);
 
     // Advance position by one step
     step_pos(config, b, config.dt, tnow, tpos);
@@ -620,6 +582,8 @@ void tidal_start(int iter, Config config, Bodies b, Placeholders p, COMFrame *f,
         v_cm[i] = v_cm[i]/mtot;
         a_cm[i] = a_cm[i]/mtot;
     }
+    // printf("vcm %.14f %.14f %.14f\n", v_cm[0], v_cm[1], v_cm[2]);
+    // printf("acm %.14f %.14f %.14f\n", a_cm[0], a_cm[1], a_cm[2]);
 
     // Retard position and velocity by one step relative to center of mass??
     for (k=0; k<config.n_bodies; k++) {
@@ -649,15 +613,36 @@ void tidal_start(int iter, Config config, Bodies b, Placeholders p, COMFrame *f,
     *tnow = 0.;
 }
 
-void step_system(int iter, Config config, Bodies b, Placeholders p, COMFrame *f,
-                 CPotential *pot, double *tnow, double *tpos, double *tvel) {
+// void step_system(int iter, Config config, Bodies b, Placeholders p, COMFrame *f,
+//                  CPotential *pot, double *tnow, double *tpos, double *tvel) {
 
-    int not_firstc = 0;
-    double strength = 1.;
+//     int not_firstc = 0;
+//     double strength = 1.;
 
-    step_pos(config, b, config.dt, tnow, tpos);
-    frame(iter, config, b, f);
-    acc_pot(config, b, p, f, pot,
-            strength, tnow, &not_firstc);
-    step_vel(config, b, config.dt, tnow, tvel);
-}
+//     printf("xyz %.10e %.10e %.10e\n", b.x[99], b.y[99], b.z[99]);
+//     printf("vxyz %.10e %.10e %.10e\n\n", b.vx[99], b.vy[99], b.vz[99]);
+
+//     step_pos(config, b, config.dt, tnow, tpos);
+//     frame(iter, config, b, f);
+//     acc_pot(config, b, p, f, pot,
+//             strength, tnow, &not_firstc);
+//     step_vel(config, b, config.dt, tnow, tvel);
+// }
+
+// void compute_progenitor_energy(Config config, Bodies b, Placeholders p, COMFrame *f,
+//                                CPotential *pot, double *tnow, double *tpos, double *tvel) {
+//     int k;
+
+//     f.E_tot = 0.;
+//     f.E_pot_ext = 0.;
+//     f.E_pot_self = 0.;
+//     f.E_kin = 0.;
+
+//     // TODO: keep track of external potential separate from BFE potential
+//     for (k=0; k<config.n_bodies; k++) {
+//               epext=epext+mass(i)*potext(i)
+//               epselfg=epselfg+0.5*mass(i)*pot(i)
+//               ektot=ektot+0.5*mass(i)*((vx(i))**2+
+//         &         (vy(i))**2+(vz(i))**2)
+//     }
+// }
