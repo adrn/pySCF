@@ -10,16 +10,16 @@ def get_package_data():
 
 def get_extensions():
 
-    # Get gary path
-    import gary
-    gary_base_path = os.path.split(gary.__file__)[0]
-    gary_path = os.path.join(gary_base_path, 'potential')
+    # Get gala path
+    import gala
+    gala_base_path = os.path.split(gala.__file__)[0]
+    gala_path = os.path.join(gala_base_path, 'potential')
 
     extensions = []
 
     cfg = setup_helpers.DistutilsExtensionArgs()
     cfg['include_dirs'].append('numpy')
-    cfg['include_dirs'].append(gary_path)
+    cfg['include_dirs'].append(gala_path)
     cfg['include_dirs'].append('scf')
     cfg['sources'].append('scf/tests/helpers.pyx')
     cfg['sources'].append('scf/src/helpers.c')

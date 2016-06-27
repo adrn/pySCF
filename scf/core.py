@@ -10,9 +10,9 @@ from astropy.constants import G
 import astropy.units as u
 import numpy as np
 
-import gary.dynamics as gd
-import gary.potential as gp
-from gary.units import UnitSystem
+import gala.dynamics as gd
+import gala.potential as gp
+from gala.units import UnitSystem
 
 # Project
 from .scf import run_scf
@@ -24,10 +24,10 @@ class SCFSimulation(object):
 
     Parameters
     ----------
-    bodies : :class:`gary.dynamics.CartesianPhaseSpacePosition`
+    bodies : :class:`gala.dynamics.CartesianPhaseSpacePosition`
         Dimensionless position and velocity of the satellite mass
         particles (the 'N bodies').
-    potential : :class:`gary.potential.CPotentialBase`
+    potential : :class:`gala.potential.CPotentialBase`
         The external potential (e.g., host galaxy) as an instance of
         a subclass of the `CPotentialBase` class.
     mass_scale : :class:`astropy.units.Quantity`
@@ -92,7 +92,7 @@ class SCFSimulation(object):
 
         Parameters
         ----------
-        w0 : :class:`gary.dynamics.CartesianPhaseSpacePosition`
+        w0 : :class:`gala.dynamics.CartesianPhaseSpacePosition`
             Initial conditions for the satellite orbit.
         dt : :class:`astropy.units.Quantity`, float
             Timestep. If no unit is provided, assumed to be in simulation units.

@@ -26,9 +26,9 @@ import cython
 cimport cython
 from cpython.exc cimport PyErr_CheckSignals
 
-# from gary.potential.cpotential cimport _CPotential, valuefunc, gradientfunc
-from gary.potential.cpotential cimport CPotentialWrapper
-# from gary.potential.cpotential import CPotentialBase
+# from gala.potential.cpotential cimport _CPotential, valuefunc, gradientfunc
+from gala.potential.cpotential cimport CPotentialWrapper
+# from gala.potential.cpotential import CPotentialBase
 
 cdef extern from "math.h":
     double sqrt(double)

@@ -3,7 +3,7 @@
 #include "gsl/gsl_sf_gegenbauer.h"
 #include <math.h>
 #include <Python.h>
-#include "src/cpotential.h" // from gary/potential
+#include "src/cpotential.h" // from gala/potential
 #include "helpers.h"
 #include "scf.h"
 
