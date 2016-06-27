@@ -49,6 +49,7 @@ class SCFSimulation(object):
         Set all even terms in the basis function expansion of the satellite
         potential (default = False).
     """
+
     @u.quantity_input(mass_scale=u.Msun, length_scale=u.kpc)
     def __init__(self, bodies, potential, mass_scale, length_scale,
                  self_gravity=True, nmax=6, lmax=4, zero_odd=False, zero_even=False,
@@ -64,6 +65,7 @@ class SCFSimulation(object):
 
         self.mass_scale = mass_scale
         self.length_scale = length_scale
+        self.units = self.units_from_scales(self.mass_scale, self.length_scale)
 
         self.self_gravity = bool(self_gravity)
         self.nmax = int(nmax)
@@ -75,14 +77,6 @@ class SCFSimulation(object):
             output_path = os.getcwd()
 
         self.output_path = os.path.abspath(output_path)
-
-        # define unit system for simulation
-        l_unit = u.Unit('{} kpc'.format(self.length_scale.to(u.kpc).value))
-        m_unit = u.Unit('{} Msun'.format(self.mass_scale.to(u.Msun).value))
-        _G = G.decompose(bases=[u.kpc,u.M_sun,u.Myr]).value
-        t_unit = u.Unit("{:08f} Myr".format(np.sqrt(l_unit.scale**3 / (_G*m_unit.scale))))
-        a_unit = u.radian
-        self.units = UnitSystem(l_unit, m_unit, t_unit, a_unit)
 
         # transform potential to simulation units
         self.potential = potential
@@ -144,3 +138,13 @@ class SCFSimulation(object):
                 nmax=self.nmax, lmax=self.lmax,
                 zero_odd=self.zero_odd, zero_even=self.zero_even,
                 self_gravity=self.self_gravity, output_file=output_file)
+
+    @staticmethod
+    def units_from_scales(mass_scale, length_scale):
+        # define unit system for simulation
+        l_unit = u.Unit('{} kpc'.format(length_scale.to(u.kpc).value))
+        m_unit = u.Unit('{} Msun'.format(mass_scale.to(u.Msun).value))
+        _G = G.decompose(bases=[u.kpc,u.M_sun,u.Myr]).value
+        t_unit = u.Unit("{:08f} Myr".format(np.sqrt(l_unit.scale**3 / (_G*m_unit.scale))))
+        a_unit = u.radian
+        return UnitSystem(l_unit, m_unit, t_unit, a_unit)
