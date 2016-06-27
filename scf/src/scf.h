@@ -35,6 +35,11 @@ typedef struct {
     double *c3;
     int *lmin;
     int *lskip;
+    double *pot0;
+    double *kin0;
+    double *ax0;
+    double *ay0;
+    double *az0;
 } Placeholders;
 
 typedef struct {
@@ -47,14 +52,16 @@ typedef struct {
     double *ax;
     double *ay;
     double *az;
-    double *pot;
-    double *kin;
+    double *Epot_ext;
+    double *Epot_bfe;
+    double *Ekin;
     double *mass;
     int *ibound;
     double *tub;
 } Bodies;
 
 typedef struct {
+    double m_prog;
     double x;
     double y;
     double z;
