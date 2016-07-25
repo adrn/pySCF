@@ -285,7 +285,8 @@ cpdef _test_accp_bfe(bodies):
         'ax': ax,
         'ay': ay,
         'az': az,
-        'pot_ext': Epot_ext
+        'pot_ext': Epot_ext,
+        'pot_bfe': Epot_bfe
     }
 
 cpdef _test_tidal_start(CPotentialWrapper cp, w0, bodies, n_tidal, length_scale, mass_scale):

@@ -173,6 +173,7 @@ def test_against_biff():
     # coeffs computed with SCF code
     res = _test_accp_bfe(b)
     scf_acc = np.vstack((res['ax'], res['ay'], res['az'])).T
+    scf_pot = res['pot_bfe']
 
     # coeffs computed with Biff
     mass = np.ones(b.pos.shape[1]) / b.pos.shape[1]
@@ -180,6 +181,7 @@ def test_against_biff():
     S,T = biff.compute_coeffs_discrete(biff_xyz, mass, nmax, lmax, 1.,
                                        skip_odd=False, skip_even=False, skip_m=False)
     biff_acc = -biff.gradient(biff_xyz, S, T, G=1., M=1., r_s=1.)
+    biff_pot = biff.potential(biff_xyz, S, T, M=1., r_s=1.)
 
     for n in range(nmax+1):
         for l in range(lmax+1):
@@ -193,3 +195,4 @@ def test_against_biff():
     frac_diff = (-np.array(res['cossum']) - S) / S
     assert np.allclose(frac_diff[np.isfinite(frac_diff)], 0.)
     assert np.allclose(biff_acc, scf_acc)
+    assert np.allclose(biff_pot, scf_pot)
