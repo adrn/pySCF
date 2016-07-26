@@ -144,8 +144,8 @@ class SCFSimulation(object):
     @staticmethod
     def units_from_scales(mass_scale, length_scale):
         # define unit system for simulation
-        l_unit = u.Unit('{} kpc'.format(length_scale.to(u.kpc).value))
-        m_unit = u.Unit('{} Msun'.format(mass_scale.to(u.Msun).value))
+        l_unit = u.Unit(length_scale.to(u.kpc))
+        m_unit = u.Unit(mass_scale.to(u.Msun))
         t_unit = u.Unit(np.sqrt((l_unit**3) / (G*m_unit)).to(u.Myr))
         v_unit = u.Unit((l_unit / t_unit).to(u.km/u.s))
         a_unit = u.radian

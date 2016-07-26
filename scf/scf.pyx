@@ -236,12 +236,6 @@ def run_scf(CPotentialWrapper cp,
         # index array for sorting particles on potential value
         int[::1] pot_idx = np.zeros(N, dtype=np.int32)
 
-        # sim units
-        double ru = length_scale.to(u.kpc)
-        double mu = mass_scale.to(u.Msun)
-        double tu = np.sqrt((ru**3) / (G*mu)).to(u.yr)
-        double vu = (ru/tu).to(u.km/u.s)
-
         # for turning on the potential:
         double extern_strength
 
@@ -251,6 +245,12 @@ def run_scf(CPotentialWrapper cp,
         # frame position, velocity at all times
         double[:,::1] frame_xyz = np.zeros((3,n_steps+1))
         double[:,::1] frame_vxyz = np.zeros((3,n_steps+1))
+
+    # sim units
+    ru = length_scale.to(u.kpc)
+    mu = mass_scale.to(u.Msun)
+    tu = np.sqrt((ru**3) / (G*mu)).to(u.yr)
+    vu = (ru/tu).to(u.km/u.s)
 
     if os.path.exists(output_file):
         raise ValueError("Output file '{}' already exists.".format(output_file))
@@ -299,10 +299,10 @@ def run_scf(CPotentialWrapper cp,
     config.zeroodd = int(zero_odd)
     config.zeroeven = int(zero_even)
     config.G = 1. # HACK: do we really need to let the user set this?
-    config.ru = ru
-    config.mu = mu
-    config.tu = tu
-    config.vu = vu
+    config.ru = ru.value
+    config.mu = mu.value
+    config.tu = tu.value
+    config.vu = vu.value
 
     # the position and velocity of the progenitor
     xyz = w0.pos.to(u.kpc).value
@@ -370,12 +370,12 @@ def run_scf(CPotentialWrapper cp,
 
     # frame in simulation units
     f.m_prog = 1.
-    f.x = f.x / ru
-    f.y = f.y / ru
-    f.z = f.z / ru
-    f.vx = f.vx / vu
-    f.vy = f.vy / vu
-    f.vz = f.vz / vu
+    f.x = f.x / config.ru
+    f.y = f.y / config.ru
+    f.z = f.z / config.ru
+    f.vx = f.vx / config.vu
+    f.vy = f.vy / config.vu
+    f.vz = f.vz / config.vu
 
     for i in range(N):
         Ekin[i] = 0.5 * (vx[i]*vx[i] + vy[i]*vy[i] + vz[i]*vz[i]);
