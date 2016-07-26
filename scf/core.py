@@ -85,7 +85,7 @@ class SCFSimulation(object):
 
     # @u.quantity_input(dt=u.Myr)
     def run(self, w0, dt, n_steps, t0=0.,
-            n_snapshot=None, n_recenter=256, n_tidal=256,
+            n_snapshot=None,  n_tidal=256,
             snapshot_filename="scfoutput.h5", overwrite=False):
         """
         Run the N-body simulation.
@@ -104,14 +104,15 @@ class SCFSimulation(object):
         n_snapshot : int (optional)
             How often to output a snapshot. Set to `None` to only save the final
             phase-space positions of the bodies.
-        n_recenter : int (optional)
-            How often to adjust the center of mass.
         n_tidal : int (optional)
             Number of steps to slowly turn on the external tidal field.
         snapshot_filename : str (optional)
             Name of the file to store simulation snapshots.
         overwrite : bool (optional)
             Overwrite existing file.
+
+        TODO: n_recenter is set to 1 because I was having issues with
+        energy conservation...
 
         """
         if not isinstance(w0, gd.CartesianPhaseSpacePosition):
@@ -121,6 +122,7 @@ class SCFSimulation(object):
         if n_snapshot is None:
             n_snapshot = 0
 
+        n_recenter = 1
         if n_recenter <= 0:
             raise ValueError("n_recenter must be > 0")
 
@@ -144,7 +146,7 @@ class SCFSimulation(object):
         # define unit system for simulation
         l_unit = u.Unit('{} kpc'.format(length_scale.to(u.kpc).value))
         m_unit = u.Unit('{} Msun'.format(mass_scale.to(u.Msun).value))
-        _G = G.decompose(bases=[u.kpc,u.M_sun,u.Myr]).value
-        t_unit = u.Unit("{:08f} Myr".format(np.sqrt(l_unit.scale**3 / (_G*m_unit.scale))))
+        t_unit = u.Unit(np.sqrt((l_unit**3) / (G*m_unit)).to(u.Myr))
+        v_unit = u.Unit((l_unit / t_unit).to(u.km/u.s))
         a_unit = u.radian
-        return UnitSystem(l_unit, m_unit, t_unit, a_unit)
+        return UnitSystem(l_unit, m_unit, t_unit, a_unit, v_unit)
