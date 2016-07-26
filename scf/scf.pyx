@@ -17,7 +17,7 @@ import sys
 # Third-party
 from astropy import log as logger
 import astropy.units as u
-from astropy.constants import G, M_sun
+from astropy.constants import G
 import h5py
 import numpy as np
 cimport numpy as np
@@ -225,7 +225,7 @@ def run_scf(CPotentialWrapper cp,
         int lmin = 0
         int lskip = 0
         double[::1] pot0 = np.zeros(N) # placeholder (internal) potential energy
-        double[::1] kin0 = np.zeros(N) # placeholder kinetic energy
+        double[::1] kin0 = np.zeros(N) # placeholder (internal) kinetic energy
         double[::1] ax0 = np.zeros(N) # placeholder
         double[::1] ay0 = np.zeros(N) # placeholder
         double[::1] az0 = np.zeros(N) # placeholder
@@ -237,21 +237,10 @@ def run_scf(CPotentialWrapper cp,
         int[::1] pot_idx = np.zeros(N, dtype=np.int32)
 
         # sim units
-        # TODO: figure out a more sensible way to do this
-        double ru = length_scale.to(u.kpc).value
-        double mu = mass_scale.to(u.Msun).value
-        # HACK: for now, set to fortran values
-        # double gee = G.decompose([u.cm,u.g,u.s]).value
-        # double msun = M_sun.to(u.g).value
-        # double cmpkpc = (1*u.kpc).to(u.cm).value
-        # double secperyr = (1*u.year).to(u.second).value
-        double gee = 6.67384e-8
-        double msun = 1.9891e33
-        double cmpkpc = 3.0856776e21
-        double secperyr = 3.15576e7
-
-        double tu = sqrt((cmpkpc*ru)**3 / (msun*mu*gee))
-        double vu = (ru*cmpkpc*1.e-5)/tu
+        double ru = length_scale.to(u.kpc)
+        double mu = mass_scale.to(u.Msun)
+        double tu = np.sqrt((ru**3) / (G*mu)).to(u.yr)
+        double vu = (ru/tu).to(u.km/u.s)
 
         # for turning on the potential:
         double extern_strength
@@ -266,22 +255,18 @@ def run_scf(CPotentialWrapper cp,
     if os.path.exists(output_file):
         raise ValueError("Output file '{}' already exists.".format(output_file))
 
-    # TODO: fucked up unit stuff
-    _G = G.decompose(bases=[u.kpc,u.M_sun,u.Myr]).value
-    X = (_G / ru**3 * mu)**-0.5
-    time_unit = u.Unit("{:08f} Myr".format(X))
     if hasattr(dt, 'unit'):
-        dt = dt.to(time_unit).value
+        dt = dt.to(tu).value
 
     if hasattr(t0, 'unit'):
-        t0 = t0.to(time_unit).value
+        t0 = t0.to(tu).value
 
     # store input parameters in the output file
     with h5py.File(output_file, 'w') as out_f:
         units = out_f.create_group('units')
-        units.attrs['time'] = str(time_unit)
-        units.attrs['length'] = str('{} kpc'.format(ru))
-        units.attrs['mass'] = str('{} Msun'.format(mu))
+        units.attrs['time'] = "{:.18f} {}".format(tu.value, tu.unit)
+        units.attrs['length'] = "{:.18f} {}".format(ru.value, ru.unit)
+        units.attrs['mass'] = "{:.18f} {}".format(mu.value, mu.unit)
 
         par = out_f.create_group('parameters')
         par.attrs['n_bodies'] = N
@@ -415,10 +400,7 @@ def run_scf(CPotentialWrapper cp,
     # Tidal start: slowly turn on tidal field
     #
     for i in range(config.n_tidal):
-        PyErr_CheckSignals()
-        # print("x {:.14f} {:.14f} {:.14f}".format(b.x[99],b.y[99],b.z[99]))
-        # print("v {:.14f} {:.14f} {:.14f}".format(b.vx[99],b.vy[99],b.vz[99]))
-
+        PyErr_CheckSignals() # check for keyboard interrupts
         tidal_start(i, config, b, p, &f,
                     &(cp.cpotential), &tnow, &tpos, &tvel)
         logger.debug("Tidal start: {}".format(i+1));
@@ -465,17 +447,31 @@ def run_scf(CPotentialWrapper cp,
         frame_vxyz[1,i+1] = f.vy
         frame_vxyz[2,i+1] = f.vz
 
+        step_vel(config, b, -0.5*config.dt, &tnow, &tvel)
+        check_progenitor(i, config, b, p, &f, &(cp.cpotential), &tnow)
+        logger.debug("Fraction of progenitor mass bound: {:.5f}".format(f.m_prog))
+
         if config.n_snapshot > 0 and (((i+1) % config.n_snapshot) == 0 and i > 0):
-            step_vel(config, b, -0.5*config.dt, &tnow, &tvel)
-            check_progenitor(i, config, b, p, &f, &(cp.cpotential), &tnow)
-            logger.debug("Fraction of progenitor mass bound: {:.5f}".format(f.m_prog))
             write_snap(output_file, i+1, j, t=tnow,
                        pos=np.vstack((np.array(x)+f.x, np.array(y)+f.y, np.array(z)+f.z)),
                        vel=np.vstack((np.array(vx), np.array(vy), np.array(vz))),
                        tub=tub)
-            step_vel(config, b, 0.5*config.dt, &tnow, &tvel)
             j += 1
-            last_t = tnow
+
+        step_vel(config, b, 0.5*config.dt, &tnow, &tvel)
+        last_t = tnow
+
+        # if config.n_snapshot > 0 and (((i+1) % config.n_snapshot) == 0 and i > 0):
+        #     step_vel(config, b, -0.5*config.dt, &tnow, &tvel)
+        #     check_progenitor(i, config, b, p, &f, &(cp.cpotential), &tnow)
+        #     logger.debug("Fraction of progenitor mass bound: {:.5f}".format(f.m_prog))
+        #     write_snap(output_file, i+1, j, t=tnow,
+        #                pos=np.vstack((np.array(x)+f.x, np.array(y)+f.y, np.array(z)+f.z)),
+        #                vel=np.vstack((np.array(vx), np.array(vy), np.array(vz))),
+        #                tub=tub)
+        #     step_vel(config, b, 0.5*config.dt, &tnow, &tvel)
+        #     j += 1
+        #     last_t = tnow
 
     if (tnow - last_t) > 0.1*dt:
         step_vel(config, b, -0.5*config.dt, &tnow, &tvel)

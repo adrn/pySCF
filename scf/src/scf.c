@@ -101,7 +101,7 @@ void accp_bfe(Config config, Bodies b, Placeholders p, int *firstc) {
     }
 
     // zero out the coefficients
-    for (l=0; l<=lmax; l++) {
+    for (l=0; l<=lmax; l++) { // zero all out
         for (m=0; m<=l; m++) {
             for (n=0; n<=nmax; n++) {
                 i1 = getIndex3D(n,l,m,lmax+1,lmax+1);
@@ -127,7 +127,7 @@ void accp_bfe(Config config, Bodies b, Placeholders p, int *firstc) {
                 sinmphi[m] = sin(m*phi);
             }
 
-            for (l=0; l<=lmax; l++) {
+            for (l=0; l<=lmax; l++) { // its ok to compute all
                 p.ultrasp[getIndex2D(0,l,lmax+1)] = 1.;
                 p.ultrasp[getIndex2D(1,l,lmax+1)] = p.twoalpha[l]*xi;
 
@@ -307,36 +307,21 @@ void accp_bfe(Config config, Bodies b, Placeholders p, int *firstc) {
 
 }
 
-// TODO: this should take function pointers to evaluate the potential, acceleration
-//       of the external potential, and a pointer to a parameter struct
 void accp_external(Config config, Bodies b, COMFrame *f,
                    CPotential *pot, double strength, double *tnow) {
 
-    // double rs = 10./config.ru;
-    // double vcirc2 = 220.*220./config.vu/config.vu;
-    // double GMs = 10.0*vcirc2/config.ru;
-
     int j, k;
-    // double xx, yy, zz, r2, rad, tsrad;
     double grad[3], q[3];
 
     for (k=0; k<config.n_bodies; k++) {
-        // THIS IS JUST HERNQUIST
         q[0] = (b.x[k] + (f->x));
         q[1] = (b.y[k] + (f->y));
         q[2] = (b.z[k] + (f->z));
 
-        // OLD
-        // xx = (b.x[k] + (f->x));
-        // yy = (b.y[k] + (f->y));
-        // zz = (b.z[k] + (f->z));
-
-        // TODO: how do i resolve units issues???
-        // (*gf)(*tnow, parvec, q, &grad[0]);
+        // Compute external potential gradient
         c_gradient(pot, *tnow, &q[0], &grad[0]);
         b.Epot_ext[k] = c_value(pot, *tnow, &q[0]);
 
-        // NEW
         b.ax[k] = b.ax[k] - strength*grad[0];
         b.ay[k] = b.ay[k] - strength*grad[1];
         b.az[k] = b.az[k] - strength*grad[2];
@@ -412,6 +397,7 @@ void frame(int iter, Config config, Bodies b, COMFrame *f) {
     xyz_min[1] = 0.;
     xyz_min[2] = 0.;
 
+    // TODO / Note: n_recenter is currently disabled
     // if ((iter == 0) || ((iter % config.n_recenter) == 0)) {
     //     indexx(config.n_bodies, b.pot, (f->pot_idx));
     // }
@@ -515,7 +501,7 @@ void check_progenitor(int iter, Config config, Bodies b, Placeholders p, COMFram
 
         for (k=0; k<config.n_bodies; k++) {
             if (p.kin0[k] > fabs(b.Epot_bfe[k])) { // relative kinetic energy > potential
-                // printf("unbound %d %.8e %.8e\n", k+1, b.kin[k], b.pot[k]);
+                // printf("unbound %d %.8e %.8e %.8e\n", k+1, b.Ekin[k], b.Epot_bfe, b.Epot_ext[k]);
                 b.ibound[k] = 0;
                 if (b.tub[k] == 0) b.tub[k] = *tnow;
             } else {
