@@ -6,30 +6,33 @@ from astropy_helpers import setup_helpers
 
 def get_extensions():
 
+    exts = []
+
+    # malloc
+    mac_incl_path = "/usr/include/malloc"
+
     # Get gala path
     import gala
     gala_base_path = os.path.split(gala.__file__)[0]
-    gala_path = os.path.join(gala_base_path, 'potential')
-
-    extensions = []
+    gala_potential_incl = os.path.join(gala_base_path, 'potential')
 
     cfg = setup_helpers.DistutilsExtensionArgs()
     cfg['include_dirs'].append('numpy')
-    cfg['include_dirs'].append(gala_path)
-    # cfg['include_dirs'].append('scf/src')
+    cfg['include_dirs'].append(mac_incl_path)
+    cfg['include_dirs'].append(gala_potential_incl)
+
+    cfg['extra_compile_args'].append('--std=gnu99')
+
     cfg['sources'].append('scf/scf.pyx')
+    cfg['sources'].append(os.path.join(gala_potential_incl, 'potential/builtin/builtin_potentials.c'))
     cfg['sources'].append('scf/src/scf.c')
     cfg['sources'].append('scf/src/helpers.c')
     cfg['sources'].append('scf/src/leapfrog.c')
 
-    # need to include this for some reason
-    cfg['sources'].append(os.path.join(gala_path, 'src', 'cpotential.c'))
+    # cfg['libraries'] = ['gsl', 'gslcblas']
 
-    cfg['libraries'] = ['gsl', 'gslcblas']
-    cfg['extra_compile_args'] = ['--std=gnu99']
-    extensions.append(Extension('scf.scf', **cfg))
-
-    return extensions
+    exts.append(Extension('scf.scf', **cfg))
+    return exts
 
 def get_package_data():
     return {'scf': ['src/*.h', 'tests/data/*']}

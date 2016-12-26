@@ -1,9 +1,9 @@
-#include "gsl/gsl_sf_gamma.h"
-#include "gsl/gsl_sf_legendre.h"
-#include "gsl/gsl_sf_gegenbauer.h"
+#include <gsl/gsl_sf_gamma.h>
+#include <gsl/gsl_sf_legendre.h>
+#include <gsl/gsl_sf_gegenbauer.h>
 #include <math.h>
 #include <Python.h>
-#include "src/cpotential.h" // from gala/potential
+#include "potential/src/cpotential.h" // from gala/potential
 #include "helpers.h"
 #include "scf.h"
 
