@@ -85,7 +85,7 @@ class SCFSimulation(object):
 
     # @u.quantity_input(dt=u.Myr)
     def run(self, w0, dt, n_steps, t0=0.,
-            n_snapshot=None,  n_tidal=256,
+            n_snapshot=None, n_tidal=256,
             snapshot_filename="scfoutput.h5", overwrite=False):
         """
         Run the N-body simulation.
