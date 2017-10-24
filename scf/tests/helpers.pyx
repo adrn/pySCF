@@ -193,12 +193,12 @@ cpdef _test_accp_bfe(bodies):
 
         # Read in the phase-space positions of the N bodies
         int N = bodies.shape[0]
-        double[::1] x = np.ascontiguousarray(bodies.pos.value[0][:])
-        double[::1] y = np.ascontiguousarray(bodies.pos.value[1][:])
-        double[::1] z = np.ascontiguousarray(bodies.pos.value[2][:])
-        double[::1] vx = np.ascontiguousarray(bodies.vel.value[0][:])
-        double[::1] vy = np.ascontiguousarray(bodies.vel.value[1][:])
-        double[::1] vz = np.ascontiguousarray(bodies.vel.value[2][:])
+        double[::1] x = np.ascontiguousarray(bodies.xyz.value[0][:])
+        double[::1] y = np.ascontiguousarray(bodies.xyz.value[1][:])
+        double[::1] z = np.ascontiguousarray(bodies.xyz.value[2][:])
+        double[::1] vx = np.ascontiguousarray(bodies.v_xyz.value[0][:])
+        double[::1] vy = np.ascontiguousarray(bodies.v_xyz.value[1][:])
+        double[::1] vz = np.ascontiguousarray(bodies.v_xyz.value[2][:])
         double[::1] mass = np.ones(N) / N
         int[::1] ibound = np.ones(N, dtype=np.int32)
         double[::1] tub = np.zeros(N)
@@ -300,12 +300,12 @@ cpdef _test_tidal_start(CPotentialWrapper cp, w0, bodies, n_tidal, length_scale,
 
         # Read in the phase-space positions of the N bodies
         int N = bodies.shape[0]
-        double[::1] x = np.ascontiguousarray(bodies.pos.value[0][:])
-        double[::1] y = np.ascontiguousarray(bodies.pos.value[1][:])
-        double[::1] z = np.ascontiguousarray(bodies.pos.value[2][:])
-        double[::1] vx = np.ascontiguousarray(bodies.vel.value[0][:])
-        double[::1] vy = np.ascontiguousarray(bodies.vel.value[1][:])
-        double[::1] vz = np.ascontiguousarray(bodies.vel.value[2][:])
+        double[::1] x = np.ascontiguousarray(bodies.xyz.value[0][:])
+        double[::1] y = np.ascontiguousarray(bodies.xyz.value[1][:])
+        double[::1] z = np.ascontiguousarray(bodies.xyz.value[2][:])
+        double[::1] vx = np.ascontiguousarray(bodies.v_xyz.value[0][:])
+        double[::1] vy = np.ascontiguousarray(bodies.v_xyz.value[1][:])
+        double[::1] vz = np.ascontiguousarray(bodies.v_xyz.value[2][:])
         double[::1] mass = np.ones(N) / N
         int[::1] ibound = np.ones(N, dtype=np.int32)
         double[::1] tub = np.zeros(N)
@@ -391,8 +391,8 @@ cpdef _test_tidal_start(CPotentialWrapper cp, w0, bodies, n_tidal, length_scale,
     config.vu = vu
 
     # the position and velocity of the progenitor
-    xyz = w0.pos.to(u.kpc).value
-    vxyz = w0.vel.to(u.km/u.s).value
+    xyz = w0.xyz.to(u.kpc).value
+    vxyz = w0.v_xyz.to(u.km/u.s).value
     f.x = float(xyz[0])
     f.y = float(xyz[1])
     f.z = float(xyz[2])

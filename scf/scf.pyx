@@ -26,8 +26,6 @@ import cython
 cimport cython
 from cpython.exc cimport PyErr_CheckSignals
 
-# from gala.potential.cpotential cimport CPotentialWrapper
-# from gala.potential.cpotential import CPotentialBase
 from gala.potential.potential.cpotential import CPotentialBase
 from gala.potential.potential.cpotential cimport CPotentialWrapper
 

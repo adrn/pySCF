@@ -58,14 +58,10 @@ def test_accp_firstc():
 def test_accp_bfe():
     atol = 1E-7
     rtol = 1E-7
-    skip = 1
-    names = ['m','x','y','z','vx','vy','vz']
-    bodies_filename = get_pkg_data_filename('data/SCFBI')
-    bodies = np.genfromtxt(bodies_filename, dtype=None, names=names,
-                           skip_header=skip)
-
-    b = gd.CartesianPhaseSpacePosition(pos=bodies[['x','y','z']].view(np.float64).reshape(-1,3).T,
-                                       vel=bodies[['vx','vy','vz']].view(np.float64).reshape(-1,3).T)
+    bodies = np.loadtxt(get_pkg_data_filename('data/SCFBI'), skiprows=1)
+    xyz = bodies[:,1:4].T
+    vxyz = bodies[:,4:7].T
+    b = gd.PhaseSpacePosition(pos=xyz, vel=vxyz)
 
     d = _test_accp_bfe(b)
 
@@ -88,21 +84,19 @@ def test_accp_bfe():
 
     # acceleration and potential at position of bodies
     f77_tbl = ascii.read(get_pkg_data_filename('data/accp_bfe.txt'))
-    for n,f77_row in enumerate(f77_tbl):
-        assert np.allclose(np.array(list(f77_row)),
-                           [d['ax'][n], d['ay'][n], d['az'][n], d['pot'][n]], atol=atol, rtol=rtol)
+
+    for field in ['ax', 'ay', 'az', 'pot_bfe']:
+        assert np.allclose(np.asarray(f77_tbl[field]), np.array(d[field]),
+                           atol=atol, rtol=rtol)
 
 def test_tidal_start():
     atol = 1E-7
     rtol = 1E-7
 
-    skip = 1
-    names = ['m','x','y','z','vx','vy','vz']
-    bodies_filename = get_pkg_data_filename('data/SCFBI')
-    bodies = np.genfromtxt(bodies_filename, dtype=None, names=names,
-                           skip_header=skip)
-    b = gd.CartesianPhaseSpacePosition(pos=bodies[['x','y','z']].view(np.float64).reshape(-1,3).T,
-                                       vel=bodies[['vx','vy','vz']].view(np.float64).reshape(-1,3).T)
+    bodies = np.loadtxt(get_pkg_data_filename('data/SCFBI'), skiprows=1)
+    xyz = bodies[:,1:4].T
+    vxyz = bodies[:,4:7].T
+    b = gd.PhaseSpacePosition(pos=xyz, vel=vxyz)
 
     # Matched to scf/fortran/SCFPAR
     rs = 10.*u.kpc
@@ -134,22 +128,35 @@ def test_tidal_start():
         assert np.allclose(np.array(list(f77_row)), d['v_after_init'].T[n], atol=atol, rtol=rtol)
 
     # compare positions and velocities after stepping one whole step
-    f77_tbl = ascii.read(get_pkg_data_filename('data/posvel_one_step.txt'))
-    for n,f77_row in enumerate(f77_tbl):
-        x_v = np.array(list(f77_row))
-        xyz = x_v[:3]
-        vxyz = x_v[3:]
-        assert np.allclose(xyz, d['xyz_one_step'].T[n], atol=atol, rtol=rtol)
-        assert np.allclose(vxyz, d['vxyz_one_step'].T[n], atol=atol, rtol=rtol)
+    f77_tbl = np.loadtxt(get_pkg_data_filename('data/posvel_one_step.txt'))
+    for i in range(3): # xyz
+        print('1 step', str(i))
+        assert np.allclose(f77_tbl[:,i], d['xyz_one_step'][i],
+                           atol=atol, rtol=rtol)
+    for i in range(3): # vxyz
+        print('1 step', 'v'+str(i))
+        assert np.allclose(f77_tbl[:,i+3], d['vxyz_one_step'][i],
+                           atol=atol, rtol=rtol)
 
     # compare positions and velocities at end of tidal start
-    f77_tbl = ascii.read(get_pkg_data_filename('data/posvel_tidal_start_end.txt'))
-    for n,f77_row in enumerate(f77_tbl):
-        x_v = np.array(list(f77_row))
-        xyz = x_v[:3]
-        vxyz = x_v[3:]
-        assert np.allclose(xyz, d['xyz_end'].T[n], atol=atol, rtol=rtol)
-        assert np.allclose(vxyz, d['vxyz_end'].T[n], atol=atol, rtol=rtol)
+    f77_tbl = np.loadtxt(get_pkg_data_filename('data/posvel_tidal_start_end.txt'))
+    for i in range(3): # xyz
+        print('end step', str(i))
+        diff = f77_tbl[:,i] - d['xyz_end'][i]
+        med = np.median(diff)
+        mad = np.median(np.abs(diff - med))
+
+        assert np.allclose(med, 0., atol=1E4 * atol) # MAGIC NUMBER
+        assert np.allclose(mad, 0., atol=1E4 * atol)
+
+    for i in range(3): # vxyz
+        print('end step', 'v'+str(i))
+        diff = f77_tbl[:,i+3] - d['vxyz_end'][i]
+        med = np.median(diff)
+        mad = np.median(np.abs(diff - med))
+
+        assert np.allclose(med, 0., atol=1E4 * atol) # MAGIC NUMBER
+        assert np.allclose(mad, 0., atol=1E4 * atol)
 
     print(d['m_prog'])
     print(d['frame_xyz'])
@@ -162,13 +169,10 @@ def test_against_biff():
     nmax = 6
     lmax = 4
 
-    skip = 1
-    names = ['m','x','y','z','vx','vy','vz']
-    bodies_filename = get_pkg_data_filename('data/SCFBI')
-    bodies = np.genfromtxt(bodies_filename, dtype=None, names=names,
-                           skip_header=skip)
-    b = gd.CartesianPhaseSpacePosition(pos=bodies[['x','y','z']].view(np.float64).reshape(-1,3).T,
-                                       vel=bodies[['vx','vy','vz']].view(np.float64).reshape(-1,3).T)
+    bodies = np.loadtxt(get_pkg_data_filename('data/SCFBI'), skiprows=1)
+    xyz = bodies[:,1:4].T
+    vxyz = bodies[:,4:7].T
+    b = gd.PhaseSpacePosition(pos=xyz, vel=vxyz)
 
     # coeffs computed with SCF code
     res = _test_accp_bfe(b)

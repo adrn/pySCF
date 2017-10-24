@@ -320,7 +320,7 @@ void accp_external(Config config, Bodies b, COMFrame *f,
 
         // Compute external potential gradient
         c_gradient(pot, *tnow, &q[0], &grad[0]);
-        b.Epot_ext[k] = c_value(pot, *tnow, &q[0]);
+        b.Epot_ext[k] = c_potential(pot, *tnow, &q[0]);
 
         b.ax[k] = b.ax[k] - strength*grad[0];
         b.ay[k] = b.ay[k] - strength*grad[1];
