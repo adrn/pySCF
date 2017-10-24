@@ -1,6 +1,6 @@
 from __future__ import absolute_import
 
-import os
+from os import path
 from distutils.core import Extension
 from astropy_helpers import setup_helpers
 
@@ -13,8 +13,8 @@ def get_extensions():
 
     # Get gala path
     import gala
-    gala_base_path = os.path.split(gala.__file__)[0]
-    gala_potential_incl = os.path.join(gala_base_path, 'potential')
+    gala_base_path = path.split(gala.__file__)[0]
+    gala_potential_incl = path.join(gala_base_path, 'potential')
 
     cfg = setup_helpers.DistutilsExtensionArgs()
     cfg['include_dirs'].append('numpy')
@@ -24,12 +24,15 @@ def get_extensions():
     cfg['extra_compile_args'].append('--std=gnu99')
 
     cfg['sources'].append('scf/scf.pyx')
-    cfg['sources'].append(os.path.join(gala_potential_incl, 'potential/builtin/builtin_potentials.c'))
+    cfg['sources'].append(path.join(gala_potential_incl, 'potential', 'src',
+                                    'cpotential.c'))
+    cfg['sources'].append(path.join(gala_potential_incl, 'potential', 'builtin',
+                                    'builtin_potentials.c'))
     cfg['sources'].append('scf/src/scf.c')
     cfg['sources'].append('scf/src/helpers.c')
     cfg['sources'].append('scf/src/leapfrog.c')
 
-    # cfg['libraries'] = ['gsl', 'gslcblas']
+    cfg['libraries'] = ['gsl', 'gslcblas']
 
     exts.append(Extension('scf.scf', **cfg))
     return exts
