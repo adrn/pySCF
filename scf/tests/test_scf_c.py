@@ -180,10 +180,12 @@ def test_against_biff():
     scf_pot = res['pot_bfe']
 
     # coeffs computed with Biff
-    mass = np.ones(b.pos.shape[1]) / b.pos.shape[1]
-    biff_xyz = np.ascontiguousarray(b.pos.value.T)
+    mass = np.ones(b.xyz.shape[1]) / b.xyz.shape[1]
+    biff_xyz = np.ascontiguousarray(b.xyz.value.T)
     S,T = biff.compute_coeffs_discrete(biff_xyz, mass, nmax, lmax, 1.,
-                                       skip_odd=False, skip_even=False, skip_m=False)
+                                       skip_odd=False, skip_even=False,
+                                       skip_m=False)
+
     biff_acc = -biff.gradient(biff_xyz, S, T, G=1., M=1., r_s=1.)
     biff_pot = biff.potential(biff_xyz, S, T, M=1., r_s=1.)
 
