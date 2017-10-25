@@ -1,7 +1,3 @@
-from __future__ import division, print_function
-
-__author__ = "adrn <adrn@astro.columbia.edu>"
-
 # Standard library
 import os
 
@@ -24,7 +20,7 @@ class SCFSimulation(object):
 
     Parameters
     ----------
-    bodies : :class:`gala.dynamics.CartesianPhaseSpacePosition`
+    bodies : :class:`gala.dynamics.PhaseSpacePosition`
         Dimensionless position and velocity of the satellite mass
         particles (the 'N bodies').
     potential : :class:`gala.potential.CPotentialBase`
@@ -52,11 +48,12 @@ class SCFSimulation(object):
 
     @u.quantity_input(mass_scale=u.Msun, length_scale=u.kpc)
     def __init__(self, bodies, potential, mass_scale, length_scale,
-                 self_gravity=True, nmax=6, lmax=4, zero_odd=False, zero_even=False,
+                 self_gravity=True, nmax=6, lmax=4,
+                 zero_odd=False, zero_even=False,
                  output_path=None):
 
-        if not isinstance(bodies, gd.CartesianPhaseSpacePosition):
-            raise ValueError("bodies must be a CartesianPhaseSpacePosition instance.")
+        if not isinstance(bodies, gd.PhaseSpacePosition):
+            raise ValueError("bodies must be a PhaseSpacePosition instance.")
         self.bodies = bodies
 
         if not isinstance(potential, gp.CPotentialBase):
@@ -81,7 +78,8 @@ class SCFSimulation(object):
         # transform potential to simulation units
         self.potential = potential
         Potential = self.potential.__class__
-        self._potential = Potential(units=self.units, **self.potential.parameters)
+        self._potential = Potential(units=self.units,
+                                    **self.potential.parameters)
 
     # @u.quantity_input(dt=u.Myr)
     def run(self, w0, dt, n_steps, t0=0.,
@@ -92,7 +90,7 @@ class SCFSimulation(object):
 
         Parameters
         ----------
-        w0 : :class:`gala.dynamics.CartesianPhaseSpacePosition`
+        w0 : :class:`gala.dynamics.PhaseSpacePosition`
             Initial conditions for the satellite orbit.
         dt : :class:`astropy.units.Quantity`, float
             Timestep. If no unit is provided, assumed to be in simulation units.
@@ -115,9 +113,9 @@ class SCFSimulation(object):
         energy conservation...
 
         """
-        if not isinstance(w0, gd.CartesianPhaseSpacePosition):
+        if not isinstance(w0, gd.PhaseSpacePosition):
             raise ValueError("Satellite initial conditions, w0, must be a "
-                             "CartesianPhaseSpacePosition instance.")
+                             "PhaseSpacePosition instance.")
 
         if n_snapshot is None:
             n_snapshot = 0
