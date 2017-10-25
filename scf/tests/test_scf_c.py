@@ -1,20 +1,12 @@
-from __future__ import division, print_function
-
-__author__ = "adrn <adrn@astro.columbia.edu>"
-
 # Standard library
-import os
-import sys
 from math import factorial
 
 # Third-party
 from astropy.constants import G
-from astropy import log as logger
 from astropy.utils.data import get_pkg_data_filename
 from astropy.io import ascii
 import astropy.units as u
 import numpy as np
-import six
 
 import gala.dynamics as gd
 import gala.potential as gp
