@@ -6,16 +6,11 @@
 # cython: wraparound=False
 # cython: profile=False
 
-from __future__ import division, print_function
-
-__author__ = "adrn <adrn@astro.columbia.edu>"
-
 # Standard library
 import os
 import sys
 
 # Third-party
-from astropy import log as logger
 import astropy.units as u
 from astropy.constants import G
 import h5py
@@ -28,6 +23,8 @@ from cpython.exc cimport PyErr_CheckSignals
 
 from gala.potential.potential.cpotential import CPotentialBase
 from gala.potential.potential.cpotential cimport CPotentialWrapper
+
+from .log import logger
 
 cdef extern from "math.h":
     double sqrt(double)
@@ -432,8 +429,8 @@ def run_scf(CPotentialWrapper cp,
     frame_vxyz[1,0] = f.vy
     frame_vxyz[2,0] = f.vz
 
-    j = 1
-    last_t = 0.
+    j = 1 # snapshot number
+    wrote = None
     for i in range(config.n_steps):
         PyErr_CheckSignals()
         step_system(i+1, config, b, p, &f, &(cp.cpotential), &tnow, &tpos, &tvel)
@@ -456,31 +453,19 @@ def run_scf(CPotentialWrapper cp,
                        vel=np.vstack((np.array(vx), np.array(vy), np.array(vz))),
                        tub=tub)
             j += 1
+            wrote = True
+
+        else:
+            wrote = False
 
         step_vel(config, b, 0.5*config.dt, &tnow, &tvel)
-        last_t = tnow
 
-        # if config.n_snapshot > 0 and (((i+1) % config.n_snapshot) == 0 and i > 0):
-        #     step_vel(config, b, -0.5*config.dt, &tnow, &tvel)
-        #     check_progenitor(i, config, b, p, &f, &(cp.cpotential), &tnow)
-        #     logger.debug("Fraction of progenitor mass bound: {:.5f}".format(f.m_prog))
-        #     write_snap(output_file, i+1, j, t=tnow,
-        #                pos=np.vstack((np.array(x)+f.x, np.array(y)+f.y, np.array(z)+f.z)),
-        #                vel=np.vstack((np.array(vx), np.array(vy), np.array(vz))),
-        #                tub=tub)
-        #     step_vel(config, b, 0.5*config.dt, &tnow, &tvel)
-        #     j += 1
-        #     last_t = tnow
-
-    if (tnow - last_t) > 0.1*dt:
-        step_vel(config, b, -0.5*config.dt, &tnow, &tvel)
-        frame(0, config, b, &f)
-        check_progenitor(i, config, b, p, &f, &(cp.cpotential), &tnow)
-        write_snap(output_file, i, j, t=tnow,
+    # Always write the last timestep (if it wasn't written already), even if n_snapshot==0
+    if not wrote:
+        write_snap(output_file, i+1, j, t=tnow,
                    pos=np.vstack((np.array(x)+f.x, np.array(y)+f.y, np.array(z)+f.z)),
                    vel=np.vstack((np.array(vx), np.array(vy), np.array(vz))),
                    tub=tub)
-        step_vel(config, b, 0.5*config.dt, &tnow, &tvel)
 
     with h5py.File(output_file, 'r+') as out_f:
         out_f.create_dataset('/cen/pos', dtype=np.float64, shape=np.array(frame_xyz).shape,
