@@ -15,7 +15,6 @@ import os
 import sys
 
 # Third-party
-from astropy import log as logger
 import astropy.units as u
 from astropy.constants import G, M_sun
 import h5py
