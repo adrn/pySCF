@@ -25,6 +25,7 @@ from gala.potential.potential.cpotential import CPotentialBase
 from gala.potential.potential.cpotential cimport CPotentialWrapper
 
 from .log import logger
+from .acceleration cimport update_acceleration
 
 cdef extern from "math.h":
     double sqrt(double)
@@ -103,9 +104,10 @@ cdef extern from "src/scf.h":
         double vz
         int *pot_idx
 
-    void acc_pot(Config config, Bodies b, Placeholders p, COMFrame *f,
-                 CPotential *pot, double extern_strength, double *tnow,
-                 int *firstc) nogil
+    # void update_acceleration(Config config, Bodies b, Placeholders p,
+    #                          COMFrame *f, CPotential *pot,
+    #                          double extern_strength, double *tnow,
+    #                          int *firstc) nogil
 
     void recenter_frame(int iter, Config config, Bodies b, COMFrame *f) nogil
 
@@ -134,6 +136,7 @@ cdef extern from "src/helpers.h":
 
 def write_snap(output_file, i, j, t, pos, vel, tub):
     # save snapshot to output file
+    # TODO: add option to write out energies as well
     with h5py.File(output_file, 'r+') as out_f:
         g = out_f.create_group('/snapshots/{}'.format(j))
         g.attrs['t'] = t
@@ -163,8 +166,8 @@ cdef void step_system(int iter, Config config, Bodies b, Placeholders p, COMFram
         f.pot_idx[i] = tmp[i]
 
     recenter_frame(iter, config, b, f)
-    acc_pot(config, b, p, f, pot,
-            strength, tnow, &not_firstc)
+    update_acceleration(config, b, p, f, pot,
+                        strength, tnow, &not_firstc)
     step_vel(config, b, config.dt, tnow, tvel)
 
 def run_scf(CPotentialWrapper cp,
@@ -376,8 +379,8 @@ def run_scf(CPotentialWrapper cp,
     for i in range(N):
         Ekin[i] = 0.5 * (vx[i]*vx[i] + vy[i]*vy[i] + vz[i]*vz[i]);
 
-    acc_pot(config, b, p, &f, &(cp.cpotential), extern_strength,
-            &tnow, &firstc)
+    update_acceleration(config, b, p, &f, &(cp.cpotential), extern_strength,
+                        &tnow, &firstc)
 
     # Sort particles index array on potential value (most bound particles first)
     # then do initial re-determination of center-of-mass frame. The sorting is

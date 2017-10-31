@@ -1,0 +1,416 @@
+# coding: utf-8
+# cython: debug=False
+# cython: boundscheck=False
+# cython: nonecheck=False
+# cython: cdivision=True
+# cython: wraparound=False
+# cython: profile=False
+
+# Standard library
+import os
+import sys
+
+# Third-party
+import astropy.units as u
+from astropy.constants import G
+import h5py
+import numpy as np
+cimport numpy as np
+np.import_array()
+import cython
+cimport cython
+
+cdef extern from "math.h":
+    double sqrt(double)
+    double atan2(double, double)
+    double cos(double)
+    double sin(double)
+
+cdef extern from "potential/src/cpotential.h":
+    ctypedef struct CPotential:
+        pass
+
+    double c_potential(CPotential *p, double t, double *q) nogil
+    void c_gradient(CPotential *p, double t, double *q, double *grad) nogil
+
+cdef extern from "src/scf.h":
+    ctypedef struct Config:
+        int n_steps
+        double dt
+        double t0
+        int n_bodies
+        int n_recenter
+        int n_snapshot
+        int n_tidal
+        int nmax
+        int lmax
+        int zeroodd
+        int zeroeven
+        int selfgravitating
+        double ru
+        double mu
+        double vu
+        double tu
+        double G
+
+    ctypedef struct Placeholders:
+        double *dblfact
+        double *twoalpha
+        double *anltilde
+        double *coeflm
+        double *plm
+        double *dplm
+        double *ultrasp
+        double *ultraspt
+        double *ultrasp1
+        double *sinsum
+        double *cossum
+        double *c1
+        double *c2
+        double *c3
+        int *lmin
+        int *lskip
+        double *pot0
+        double *kin0
+        double *ax0
+        double *ay0
+        double *az0
+
+    ctypedef struct Bodies:
+        double *x
+        double *y
+        double *z
+        double *vx
+        double *vy
+        double *vz
+        double *ax
+        double *ay
+        double *az
+        double *Epot_ext;
+        double *Epot_bfe;
+        double *Ekin;
+        double *mass
+        int *ibound
+        double *tub
+
+    ctypedef struct COMFrame:
+        double m_prog
+        double x
+        double y
+        double z
+        double vx
+        double vy
+        double vz
+        int *pot_idx
+
+    void internal_bfe_init(Config config, Placeholders p) nogil
+
+# needed for some reason
+cdef extern from "src/helpers.h":
+    void indexx(int n, double *arrin, int *indx) nogil
+    int getIndex2D(int row, int col, int ncol) nogil
+    int getIndex3D(int row, int col, int dep, int ncol, int ndep) nogil
+
+# ----------------------------------------------------------------------------
+
+cdef void internal_bfe_field(Config config, Bodies b, Placeholders p,
+                             int *firstc):
+    """
+    Compute the acceleration and potential energy from the basis function
+    expansion (BFE) estimate of the gravitational potential/density of
+    particles still bound to the satellite system.
+
+    Parameters
+    ----------
+    config : Config (struct)
+        Struct containing configuration parameters.
+    b : Bodies (struct)
+        Struct of pointers to arrays that contain information about the mass
+        particles (the bodies).
+    p : Placeholders (struct)
+        Struct of pointers to placeholder arrays used in the BFE calculations.
+    firstc : int
+        Boolean integer value specifying whether this is the first acceleration
+        calculation or not. If so, will call `internal_bfe_init()` to initialize
+        the BFE coefficient / placeholder arrays.
+    """
+
+    cdef:
+        int j,k,n,l,m, i1,i2
+        double r, costh, phi, xi
+        double un, unm1, plm1m, plm2m
+        double temp3, temp4, temp5, temp6, ttemp5
+        double ar, ath, aphi, cosp, sinp, phinltil, sinth
+        double clm, dlm, elm, flm
+        int lmax = config.lmax
+        int nmax = config.nmax
+        # double cosmphi[lmax+1], sinmphi[lmax+1]
+        double[::1] cosmphi = np.zeros(lmax+1, dtype=np.float64)
+        double[::1] sinmphi = np.zeros(lmax+1, dtype=np.float64)
+
+        # HACK: because Cython doesn't support step in range()
+        int count
+
+        # dereference
+        int lmin
+        int lskip
+
+    if firstc[0]:
+        internal_bfe_init(config, p)
+        firstc[0] = 0
+
+    # modified inside internal_bfe_init(), so definitions must be here
+    lmin = p.lmin[0]
+    lskip = p.lskip[0]
+
+    # zero out the coefficients
+    for l in range(0, lmax+1):
+        for m in range(0, l+1):
+            for n in range(0, nmax+1):
+                i1 = getIndex3D(n,l,m,lmax+1,lmax+1)
+                p.sinsum[i1] = 0.
+                p.cossum[i1] = 0.
+
+    # This loop computes the BFE coefficients for all bound particles.
+    # TODO: I think this loop can't be parallel as is because each iteration
+    # modifies the same array location in memory.
+    for k in range(0, config.n_bodies):
+        if b.ibound[k] > 0: # skip unbound particles
+            r = sqrt(b.x[k]*b.x[k] + b.y[k]*b.y[k] + b.z[k]*b.z[k])
+            costh = b.z[k] / r
+            phi = atan2(b.y[k], b.x[k])
+            xi = (r - 1.) / (r + 1.)
+
+            # precompute all cos(m*phi), sin(m*phi)
+            for m in range(0, lmax+1):
+                cosmphi[m] = cos(m*phi)
+                sinmphi[m] = sin(m*phi)
+
+            for l in range(0, lmax+1): # its ok to compute all
+                p.ultrasp[getIndex2D(0,l,lmax+1)] = 1.
+                p.ultrasp[getIndex2D(1,l,lmax+1)] = p.twoalpha[l]*xi
+
+                un = p.ultrasp[getIndex2D(1,l,lmax+1)]
+                unm1 = 1.0
+
+                for n in range(1, nmax):
+                    i1 = getIndex2D(n+1,l,lmax+1)
+                    i2 = getIndex2D(n,l,lmax+1)
+                    p.ultrasp[i1] = (p.c1[i2]*xi*un-p.c2[i2]*unm1)*p.c3[n]
+                    unm1 = un
+                    un = p.ultrasp[i1]
+
+                for n in range(0, nmax+1):
+                    i1 = getIndex2D(n,l,lmax+1)
+                    p.ultraspt[i1] = p.ultrasp[i1] * p.anltilde[i1]
+
+            for m in range(0, lmax+1):
+                i1 = getIndex2D(m,m,lmax+1)
+                p.plm[i1] = 1.0
+                if m > 0:
+                    p.plm[i1] = (-1)**m * p.dblfact[m] * sqrt(1.-costh*costh)**m
+
+                plm1m = p.plm[i1]
+                plm2m = 0.0
+
+                for l in range(m+1, lmax+1):
+                    i2 = getIndex2D(l,m,lmax+1)
+                    p.plm[i2] = (costh*(2.*l-1.)*plm1m - (l+m-1.)*plm2m) / (l-m)
+                    plm2m = plm1m
+                    plm1m = p.plm[i2]
+
+            # HACK: Cython doesn't support step in range
+            count = (lmax-lmin+lskip) // lskip
+            # for l in range(lmin, lmax+1, lskip):
+            for l in range(count):
+                l = lmin + lskip*l
+                temp5 = r**l / (1.+r)**(2*l+1) * b.mass[k]
+
+                for m in range(0, l+1):
+                    i1 = getIndex2D(l,m,lmax+1)
+                    ttemp5 = temp5 * p.plm[i1] * p.coeflm[i1]
+                    temp3 = ttemp5 * sinmphi[m]
+                    temp4 = ttemp5 * cosmphi[m]
+
+                    for n in range(0, nmax+1):
+                        i1 = getIndex2D(n,l,lmax+1)
+                        i2 = getIndex3D(n,l,m,lmax+1,lmax+1)
+                        p.sinsum[i2] = p.sinsum[i2] + temp3*p.ultraspt[i1]
+                        p.cossum[i2] = p.cossum[i2] + temp4*p.ultraspt[i1]
+
+    # This loop computes the acceleration and potential at each particle given
+    # the BFE coeffs.
+    # TODO: this loop I think *can* be parallelized, since we're filling
+    # different places in memory for each body
+    for k in range(0, config.n_bodies):
+        r = sqrt(b.x[k]*b.x[k] + b.y[k]*b.y[k] + b.z[k]*b.z[k])
+        costh = b.z[k] / r
+        phi = atan2(b.y[k], b.x[k])
+        xi = (r - 1.) / (r + 1.)
+
+        # precompute all cos(m*phi), sin(m*phi)
+        # TODO: if we parallelize, can't do this...
+        for m in range(0, lmax+1):
+            cosmphi[m] = cos(m*phi)
+            sinmphi[m] = sin(m*phi)
+
+        # Zero out potential and accelerations
+        b.Epot_bfe[k] = 0.
+        ar = 0.
+        ath = 0.
+        aphi = 0.
+
+        for l in range(0, lmax+1):
+            p.ultrasp[getIndex2D(0,l,lmax+1)] = 1.
+            p.ultrasp[getIndex2D(1,l,lmax+1)] = p.twoalpha[l]*xi
+            p.ultrasp1[getIndex2D(0,l,lmax+1)] = 0.
+            p.ultrasp1[getIndex2D(1,l,lmax+1)] = 1.
+
+            un = p.ultrasp[getIndex2D(1,l,lmax+1)]
+            unm1 = 1.
+
+            for n in range(1, nmax):
+                i1 = getIndex2D(n+1,l,lmax+1)
+                i2 = getIndex2D(n,l,lmax+1)
+                p.ultrasp[i1] = (p.c1[i2]*xi*un - p.c2[i2]*unm1) * p.c3[n]
+                unm1 = un
+                un = p.ultrasp[i1]
+                p.ultrasp1[i1] = ((p.twoalpha[l]+(n+1)-1.)*unm1-(n+1)*xi*p.ultrasp[i1]) / (p.twoalpha[l]*(1.-xi*xi))
+
+        for m in range(0, lmax+1):
+            i1 = getIndex2D(m,m,lmax+1)
+            p.plm[i1] = 1.0
+            if m > 0:
+                p.plm[i1] = (-1.)**m * p.dblfact[m] * sqrt(1.-costh*costh)**m
+
+            plm1m = p.plm[i1]
+            plm2m = 0.0
+
+            for l in range(m+1, lmax+1):
+                i2 = getIndex2D(l,m,lmax+1)
+                p.plm[i2] = (costh*(2.*l-1.)*plm1m - (l+m-1.)*plm2m) / (l-m)
+                plm2m = plm1m
+                plm1m = p.plm[i2]
+
+        p.dplm[0] = 0.
+
+        for l in range(1, lmax+1):
+            for m in range(0, l+1):
+                i1 = getIndex2D(l,m,lmax+1);
+                if l == m:
+                    p.dplm[i1] = l*costh*p.plm[i1]/(costh*costh-1.0)
+                else:
+                    i2 = getIndex2D(l-1,m,lmax+1);
+                    p.dplm[i1] = (l*costh*p.plm[i1]-(l+m)*p.plm[i2]) / (costh*costh-1.0)
+
+        # HACK: Cython doesn't support step in range
+        count = (lmax-lmin+lskip) // lskip
+        # for l in range(lmin, lmax+1, lskip):
+        for l in range(count):
+            l = lmin + lskip*l
+            temp3 = 0.
+            temp4 = 0.
+            temp5 = 0.
+            temp6 = 0.
+
+            for m in range(0, l+1):
+                clm = 0.
+                dlm = 0.
+                elm = 0.
+                flm = 0.
+                for n in range(0, nmax+1):
+                    i1 = getIndex2D(n,l,lmax+1)
+                    i2 = getIndex3D(n,l,m,lmax+1,lmax+1)
+
+                    clm = clm + p.ultrasp[i1]*p.cossum[i2]
+                    dlm = dlm + p.ultrasp[i1]*p.sinsum[i2]
+                    elm = elm + p.ultrasp1[i1]*p.cossum[i2]
+                    flm = flm + p.ultrasp1[i1]*p.sinsum[i2]
+
+                i1 = getIndex2D(l,m,lmax+1)
+                temp3 = temp3 + p.plm[i1]*(clm*cosmphi[m]+dlm*sinmphi[m])
+                temp4 = temp4 - p.plm[i1]*(elm*cosmphi[m]+flm*sinmphi[m])
+                temp5 = temp5 - p.dplm[i1]*(clm*cosmphi[m]+dlm*sinmphi[m])
+                temp6 = temp6 - m*p.plm[i1]*(dlm*cosmphi[m]-clm*sinmphi[m])
+
+            phinltil = r**l / (1.+r)**(2*l+1)
+            b.Epot_bfe[k] = b.Epot_bfe[k] + temp3*phinltil
+            ar = ar + phinltil * (-temp3*(l/r-(2.*l+1.)/(1.+r)) +
+                                  temp4*4.*(2.*l+1.5)/(1.+r)**2)
+            ath = ath + temp5*phinltil
+            aphi = aphi + temp6*phinltil
+
+        cosp = cos(phi)
+        sinp = sin(phi)
+
+        sinth = sqrt(1.-costh*costh)
+        ath = -sinth*ath/r
+        aphi = aphi/(r*sinth)
+
+        b.ax[k] = config.G*(sinth*cosp*ar + costh*cosp*ath - sinp*aphi)
+        b.ay[k] = config.G*(sinth*sinp*ar + costh*sinp*ath + cosp*aphi)
+        b.az[k] = config.G*(costh*ar - sinth*ath)
+        b.Epot_bfe[k] = b.Epot_bfe[k]*config.G
+
+cdef void external_field(Config config, Bodies b, COMFrame *f,
+                         CPotential *pot, double strength, double *tnow):
+    """
+    Compute the acceleration, potential of the external tidal field.
+    """
+    cdef:
+        int j, k
+        double grad[3]
+        double q[3]
+
+    for k in range(config.n_bodies):
+        q[0] = b.x[k] + f.x
+        q[1] = b.y[k] + f.y
+        q[2] = b.z[k] + f.z
+
+        # Compute external potential gradient
+        c_gradient(pot, tnow[0], &q[0], &grad[0])
+        b.Epot_ext[k] = c_potential(pot, tnow[0], &q[0])
+
+        b.ax[k] = b.ax[k] - strength*grad[0]
+        b.ay[k] = b.ay[k] - strength*grad[1]
+        b.az[k] = b.az[k] - strength*grad[2]
+
+cdef void update_acceleration(Config config, Bodies b, Placeholders p,
+                              COMFrame *f, CPotential *pot,
+                              double extern_strength, double *tnow,
+                              int *firstc):
+    """
+    Compute the total acceleration and potential energy for each N body.
+
+    Parameters
+    ----------
+    config : Config (struct)
+        Struct containing configuration parameters.
+    b : Bodies (struct)
+        Struct of pointers to arrays that contain information about the mass
+        particles (the bodies).
+    p : Placeholders (struct)
+        Struct of pointers to placeholder arrays used in the BFE calculations.
+    extern_strength : double
+        The strength of the external potential (normalized to the range (0,1)).
+        Used by `tidal_start()` to slowly turn on the external field.
+    firstc : int
+        Boolean integer value specifying whether this is the first acceleration
+        calculation or not. If so, will call `internal_bfe_init()` to initialize
+        the BFE coefficient / placeholder arrays.
+    """
+    cdef int j,k
+
+    if config.selfgravitating:
+        internal_bfe_field(config, b, p, firstc)
+        external_field(config, b, f, pot, extern_strength, tnow)
+
+    else:
+        for k in range(config.n_bodies):
+            b.ax[k] = 0.;
+            b.ay[k] = 0.;
+            b.az[k] = 0.;
+            b.Epot_ext[k] = 0.;
+            b.Epot_bfe[k] = 0.;
+
+        external_field(config, b, f, pot, extern_strength, tnow)
