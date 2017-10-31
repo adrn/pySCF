@@ -368,7 +368,7 @@ void acc_pot(Config config, Bodies b, Placeholders p, COMFrame *f,
 
 }
 
-void frame(int iter, Config config, Bodies b, COMFrame *f) {
+void recenter_frame(int iter, Config config, Bodies b, COMFrame *f) {
     /*
     Recompute the center-of-mass frame.
 
@@ -386,64 +386,54 @@ void frame(int iter, Config config, Bodies b, COMFrame *f) {
         of the frame.
     */
 
-    // take the most bound particles (?)
-    int nend = config.n_bodies / 100;
-    if (nend < 128) nend = 128;
+    // TODO: make the minimum number of bound particles a configurable param
+    // Use only the most bound particles to determine the new frame
+    int nend = config.n_bodies / 10;
+    if (nend < 1024) nend = 1024; // Always use at least 1024 particles
     int i,j,k;
 
-    double mred = 0.;
-    double xyz_min[3];
-    xyz_min[0] = 0.;
-    xyz_min[1] = 0.;
-    xyz_min[2] = 0.;
-
-    // TODO / Note: n_recenter is currently disabled
-    // if ((iter == 0) || ((iter % config.n_recenter) == 0)) {
-    //     indexx(config.n_bodies, b.pot, (f->pot_idx));
-    // }
-
-    // for (i=0; i<=6; i++) {
-    //     printf("rank %d %d %.14e\n", i, (f->pot_idx)[i], b.pot[(f->pot_idx)[i]]);
-    // }
+    double total_mass = 0.;
+    double center_of_mass[6]; // x,y,z,vx,vy,vz
+    for (j=0; j<6; j++) {
+        center_of_mass[j] = 0.;
+    }
 
     for (i=0; i<nend; i++) {
         k = (f->pot_idx)[i];
-        xyz_min[0] = xyz_min[0] + b.mass[k]*b.x[k];
-        xyz_min[1] = xyz_min[1] + b.mass[k]*b.y[k];
-        xyz_min[2] = xyz_min[2] + b.mass[k]*b.z[k];
-        mred = mred + b.mass[k];
+        center_of_mass[0] = center_of_mass[0] + b.mass[k]*b.x[k];
+        center_of_mass[1] = center_of_mass[1] + b.mass[k]*b.y[k];
+        center_of_mass[2] = center_of_mass[2] + b.mass[k]*b.z[k];
+
+        center_of_mass[3] = center_of_mass[3] + b.mass[k]*b.vx[k];
+        center_of_mass[4] = center_of_mass[4] + b.mass[k]*b.vy[k];
+        center_of_mass[5] = center_of_mass[5] + b.mass[k]*b.vz[k];
+
+        total_mass = total_mass + b.mass[k];
     }
 
-    xyz_min[0] = xyz_min[0] / mred;
-    xyz_min[1] = xyz_min[1] / mred;
-    xyz_min[2] = xyz_min[2] / mred;
+    // Divide out total mass
+    for (j=0; j<6; j++) {
+        center_of_mass[j] = center_of_mass[j] / total_mass;
+    }
 
     // Update frame and shift to center on the minimum of the potential
-    (f->x) = (f->x) + xyz_min[0];
-    (f->y) = (f->y) + xyz_min[1];
-    (f->z) = (f->z) + xyz_min[2];
+    (f->x) = (f->x) + center_of_mass[0];
+    (f->y) = (f->y) + center_of_mass[1];
+    (f->z) = (f->z) + center_of_mass[2];
+    (f->vx) = (f->vx) + center_of_mass[3];
+    (f->vy) = (f->vy) + center_of_mass[4];
+    (f->vz) = (f->vz) + center_of_mass[5];
 
+    // Shift all positions to be oriented on the center-of-mass frame
     for (k=0; k<config.n_bodies; k++) {
-        b.x[k] = b.x[k] - xyz_min[0];
-        b.y[k] = b.y[k] - xyz_min[1];
-        b.z[k] = b.z[k] - xyz_min[2];
-    }
+        b.x[k] = b.x[k] - center_of_mass[0];
+        b.y[k] = b.y[k] - center_of_mass[1];
+        b.z[k] = b.z[k] - center_of_mass[2];
 
-    // find velocity frame
-    (f->vx) = 0.;
-    (f->vy) = 0.;
-    (f->vz) = 0.;
-    for (i=0; i<nend; i++) {
-        k = (f->pot_idx)[i];
-        // printf("%d\n", k);
-        (f->vx) = (f->vx) + b.mass[k]*b.vx[k];
-        (f->vy) = (f->vy) + b.mass[k]*b.vy[k];
-        (f->vz) = (f->vz) + b.mass[k]*b.vz[k];
+        b.vx[k] = b.vx[k] - center_of_mass[3];
+        b.vy[k] = b.vy[k] - center_of_mass[4];
+        b.vz[k] = b.vz[k] - center_of_mass[5];
     }
-    (f->vx) = (f->vx) / mred;
-    (f->vy) = (f->vy) / mred;
-    (f->vz) = (f->vz) / mred;
-
 }
 
 void check_progenitor(int iter, Config config, Bodies b, Placeholders p, COMFrame *f,
@@ -499,7 +489,6 @@ void check_progenitor(int iter, Config config, Bodies b, Placeholders p, COMFram
 
         for (k=0; k<config.n_bodies; k++) {
             if (p.kin0[k] > fabs(b.Epot_bfe[k])) { // relative kinetic energy > potential
-                // printf("unbound %d %.8e %.8e %.8e\n", k+1, b.Ekin[k], b.Epot_bfe, b.Epot_ext[k]);
                 b.ibound[k] = 0;
                 if (b.tub[k] == 0) b.tub[k] = *tnow;
             } else {

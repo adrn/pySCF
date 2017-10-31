@@ -107,7 +107,7 @@ cdef extern from "src/scf.h":
                  CPotential *pot, double extern_strength, double *tnow,
                  int *firstc) nogil
 
-    void frame(int iter, Config config, Bodies b, COMFrame *f) nogil
+    void recenter_frame(int iter, Config config, Bodies b, COMFrame *f) nogil
 
     void step_vel(Config config, Bodies b, double dt,
                   double *tnow, double *tvel) nogil
@@ -152,12 +152,6 @@ cdef void step_system(int iter, Config config, Bodies b, Placeholders p, COMFram
         int[::1] tmp = np.zeros(config.n_bodies, dtype=np.int32)
         double[::1] wtf = np.zeros(config.n_bodies, dtype=np.float64)
 
-    # print("xyz {:.14f} {:.14f} {:.14f}".format(b.x[99], b.y[99], b.z[99]))
-    # print("vxyz {:.14f} {:.14f} {:.14f}".format(b.vx[99], b.vy[99], b.vz[99]))
-    # print("xframe {:.14f} {:.14f} {:.14f}".format(f.x, f.y, f.z))
-    # print("vframe {:.14f} {:.14f} {:.14f}".format(f.vx, f.vy, f.vz))
-    # print()
-
     step_pos(config, b, config.dt, tnow, tpos)
 
     # sort particles index array on internal potential value
@@ -168,12 +162,11 @@ cdef void step_system(int iter, Config config, Bodies b, Placeholders p, COMFram
     for i in range(config.n_bodies):
         f.pot_idx[i] = tmp[i]
 
-    frame(iter, config, b, f)
+    recenter_frame(iter, config, b, f)
     acc_pot(config, b, p, f, pot,
             strength, tnow, &not_firstc)
     step_vel(config, b, config.dt, tnow, tvel)
 
-# TODO: is there some bug with the first snapshot output being offset in velocity?
 def run_scf(CPotentialWrapper cp,
             w0, bodies, mass_scale, length_scale,
             dt, n_steps, t0, n_snapshot, n_recenter, n_tidal,
@@ -227,7 +220,7 @@ def run_scf(CPotentialWrapper cp,
         double[::1] az0 = np.zeros(N) # placeholder
 
         int i,j
-        int[::1] tmp = np.zeros(N, dtype=np.int32) # temporary array for indexing
+        int[::1] tmp = np.zeros(N, dtype=np.int32) # temp array for indexing
 
         # index array for sorting particles on potential value
         int[::1] pot_idx = np.zeros(N, dtype=np.int32)
@@ -238,18 +231,19 @@ def run_scf(CPotentialWrapper cp,
         # timing
         double tnow, tpos, tvel
 
-        # frame position, velocity at all times
-        double[:,::1] frame_xyz = np.zeros((3,n_steps+1))
-        double[:,::1] frame_vxyz = np.zeros((3,n_steps+1))
+        # center-of-mass frame position, velocity at all timesteps
+        double[:,::1] frame_xyz = np.zeros((3, n_steps+1))
+        double[:,::1] frame_vxyz = np.zeros((3, n_steps+1))
 
-    # sim units
+    # Simulation units
     ru = length_scale.to(u.kpc)
     mu = mass_scale.to(u.Msun)
     tu = np.sqrt((ru**3) / (G*mu)).to(u.yr)
     vu = (ru/tu).to(u.km/u.s)
 
     if os.path.exists(output_file):
-        raise ValueError("Output file '{}' already exists.".format(output_file))
+        raise ValueError("Output file '{0}' already exists."
+                         .format(output_file))
 
     if hasattr(dt, 'unit'):
         dt = dt.to(tu).value
@@ -257,12 +251,12 @@ def run_scf(CPotentialWrapper cp,
     if hasattr(t0, 'unit'):
         t0 = t0.to(tu).value
 
-    # store input parameters in the output file
+    # Store input parameters in the output file
     with h5py.File(output_file, 'w') as out_f:
         units = out_f.create_group('units')
-        units.attrs['time'] = "{:.18f} {}".format(tu.value, tu.unit)
-        units.attrs['length'] = "{:.18f} {}".format(ru.value, ru.unit)
-        units.attrs['mass'] = "{:.18f} {}".format(mu.value, mu.unit)
+        units.attrs['time'] = "{:.18f}".format(tu)
+        units.attrs['length'] = "{:.18f}".format(ru)
+        units.attrs['mass'] = "{:.18f}".format(mu)
 
         par = out_f.create_group('parameters')
         par.attrs['n_bodies'] = N
@@ -294,13 +288,13 @@ def run_scf(CPotentialWrapper cp,
     config.lmax = int(lmax)
     config.zeroodd = int(zero_odd)
     config.zeroeven = int(zero_even)
-    config.G = 1. # HACK: do we really need to let the user set this?
+    config.G = 1. # work in units where G = 1
     config.ru = ru.value
     config.mu = mu.value
     config.tu = tu.value
     config.vu = vu.value
 
-    # the position and velocity of the progenitor
+    # The position and velocity of the progenitor
     xyz = w0.xyz.to(u.kpc).value
     vxyz = w0.v_xyz.to(u.km/u.s).value
     f.x = float(xyz[0])
@@ -311,7 +305,9 @@ def run_scf(CPotentialWrapper cp,
     f.vz = float(vxyz[2])
     f.pot_idx = &pot_idx[0]
 
-    # The N bodies
+    # The N bodies: pointers to arrays containing initial conditions, etc.
+    # Note that the positions (x,y,z) and velocities (vx,vy,vz) are *relative to
+    # the center of mass frame*
     b.x = &x[0]
     b.y = &y[0]
     b.z = &z[0]
@@ -351,21 +347,23 @@ def run_scf(CPotentialWrapper cp,
     p.ay0 = &ay0[0]
     p.az0 = &az0[0]
 
-    # initial strength of tidal field
+    # Initial strength of tidal field
     if config.n_tidal > 0:
+        # If we're going to slowly turn on the tidal field, start from 0
         extern_strength = 0.
     else:
+        # If we don't ramp up the tidal field, start at full strength
         extern_strength = 1.
 
     # ------------------------------------------------------------------------
-    # this stuff follows `initsys`
-    #
+    # This stuff follows `initsys` in the original FORTRAN implementation
+
     tnow = config.t0
     tpos = tnow
     tvel = tnow
 
-    # frame in simulation units
-    f.m_prog = 1.
+    # Frame in simulation units
+    f.m_prog = 1. # mass unit is the total mass of the progenitor
     f.x = f.x / config.ru
     f.y = f.y / config.ru
     f.z = f.z / config.ru
@@ -373,28 +371,30 @@ def run_scf(CPotentialWrapper cp,
     f.vy = f.vy / config.vu
     f.vz = f.vz / config.vu
 
+    # Compute initial (internal) kinetic energy of particles, add progenitor
+    # velocity to particle velocities
     for i in range(N):
         Ekin[i] = 0.5 * (vx[i]*vx[i] + vy[i]*vy[i] + vz[i]*vz[i]);
-        vx[i] = vx[i] + f.vx
-        vy[i] = vy[i] + f.vy
-        vz[i] = vz[i] + f.vz
 
-    acc_pot(config, b, p, &f, &(cp.cpotential), extern_strength, &tnow, &firstc)
+    acc_pot(config, b, p, &f, &(cp.cpotential), extern_strength,
+            &tnow, &firstc)
 
-    # sort particles index array on potential value
+    # Sort particles index array on potential value (most bound particles first)
+    # then do initial re-determination of center-of-mass frame. The sorting is
+    # important for doing the frame determination!
     tmp = np.argsort(Epot_bfe).astype(np.int32)
     for i in range(N):
         pot_idx[i] = tmp[i]
-    frame(0, config, b, &f)
+    recenter_frame(0, config, b, &f)
 
-    # initialize velocities (take a half step in time)
+    # Initialize velocities (take a half step in time)
     step_vel(config, b, 0.5*config.dt, &tnow, &tvel)
-    #
+
     # ------------------------------------------------------------------------
 
     # ------------------------------------------------------------------------
     # Tidal start: slowly turn on tidal field
-    #
+
     for i in range(config.n_tidal):
         PyErr_CheckSignals() # check for keyboard interrupts
         tidal_start(i, config, b, p, &f,
@@ -404,22 +404,26 @@ def run_scf(CPotentialWrapper cp,
     # Synchronize the velocities with the positions
     step_vel(config, b, -0.5*config.dt, &tnow, &tvel)
 
-    # sort particles index array on potential value
+    # Sort particles index array on potential value
     tmp = np.argsort(Epot_bfe).astype(np.int32)
     for i in range(N):
-        pot_idx[i] = tmp[i]
-    frame(0, config, b, &f)
+        pot_idx[i] = tmp[i] # (f->pot_idx) points to this
+    recenter_frame(0, config, b, &f)
     check_progenitor(0, config, b, p, &f, &(cp.cpotential), &tnow)
 
-    # write initial positions out
+    # Write initial positions out after tidal start
     write_snap(output_file, i=0, j=0, t=tnow,
-               pos=np.vstack((np.array(x)+f.x, np.array(y)+f.y, np.array(z)+f.z)),
-               vel=np.vstack((np.array(vx), np.array(vy), np.array(vz))),
+               pos=np.vstack((np.array(x) + f.x,
+                              np.array(y) + f.y,
+                              np.array(z) + f.z)),
+               vel=np.vstack((np.array(vx),
+                              np.array(vy),
+                              np.array(vz))),
                tub=tub)
 
     # Reset the velocities to being 1/2 step ahead of the positions
     step_vel(config, b, 0.5*config.dt, &tnow, &tvel)
-    #
+
     # ------------------------------------------------------------------------
 
     frame_xyz[0,0] = f.x
