@@ -6,25 +6,19 @@
 # cython: wraparound=False
 # cython: profile=False
 
-# Standard library
-import os
-import sys
-
 # Third-party
-import astropy.units as u
-from astropy.constants import G
-import h5py
 import numpy as np
 cimport numpy as np
 np.import_array()
 import cython
 cimport cython
+from cython.parallel import parallel, prange
 
 cdef extern from "math.h":
-    double sqrt(double)
-    double atan2(double, double)
-    double cos(double)
-    double sin(double)
+    double sqrt(double) nogil
+    double atan2(double, double) nogil
+    double cos(double) nogil
+    double sin(double) nogil
 
 cdef extern from "potential/src/cpotential.h":
     ctypedef struct CPotential:
@@ -242,115 +236,117 @@ cdef void internal_bfe_field(Config config, Bodies b, Placeholders p,
     # the BFE coeffs.
     # TODO: this loop I think *can* be parallelized, since we're filling
     # different places in memory for each body
-    for k in range(0, config.n_bodies):
-        r = sqrt(b.x[k]*b.x[k] + b.y[k]*b.y[k] + b.z[k]*b.z[k])
-        costh = b.z[k] / r
-        phi = atan2(b.y[k], b.x[k])
-        xi = (r - 1.) / (r + 1.)
+    with nogil, parallel():
+        # for k in range(0, config.n_bodies):
+        for k in prange(config.n_bodies, schedule='guided'):
+            r = sqrt(b.x[k]*b.x[k] + b.y[k]*b.y[k] + b.z[k]*b.z[k])
+            costh = b.z[k] / r
+            phi = atan2(b.y[k], b.x[k])
+            xi = (r - 1.) / (r + 1.)
 
-        # precompute all cos(m*phi), sin(m*phi)
-        # TODO: if we parallelize, can't do this...
-        for m in range(0, lmax+1):
-            cosmphi[m] = cos(m*phi)
-            sinmphi[m] = sin(m*phi)
+            # precompute all cos(m*phi), sin(m*phi)
+            # TODO: if we parallelize, can't do this...
+            for m in range(0, lmax+1):
+                cosmphi[m] = cos(m*phi)
+                sinmphi[m] = sin(m*phi)
 
-        # Zero out potential and accelerations
-        b.Epot_bfe[k] = 0.
-        ar = 0.
-        ath = 0.
-        aphi = 0.
+            # Zero out potential and accelerations
+            b.Epot_bfe[k] = 0.
+            ar = 0.
+            ath = 0.
+            aphi = 0.
 
-        for l in range(0, lmax+1):
-            p.ultrasp[getIndex2D(0,l,lmax+1)] = 1.
-            p.ultrasp[getIndex2D(1,l,lmax+1)] = p.twoalpha[l]*xi
-            p.ultrasp1[getIndex2D(0,l,lmax+1)] = 0.
-            p.ultrasp1[getIndex2D(1,l,lmax+1)] = 1.
+            for l in range(0, lmax+1):
+                p.ultrasp[getIndex2D(0,l,lmax+1)] = 1.
+                p.ultrasp[getIndex2D(1,l,lmax+1)] = p.twoalpha[l]*xi
+                p.ultrasp1[getIndex2D(0,l,lmax+1)] = 0.
+                p.ultrasp1[getIndex2D(1,l,lmax+1)] = 1.
 
-            un = p.ultrasp[getIndex2D(1,l,lmax+1)]
-            unm1 = 1.
+                un = p.ultrasp[getIndex2D(1,l,lmax+1)]
+                unm1 = 1.
 
-            for n in range(1, nmax):
-                i1 = getIndex2D(n+1,l,lmax+1)
-                i2 = getIndex2D(n,l,lmax+1)
-                p.ultrasp[i1] = (p.c1[i2]*xi*un - p.c2[i2]*unm1) * p.c3[n]
-                unm1 = un
-                un = p.ultrasp[i1]
-                p.ultrasp1[i1] = ((p.twoalpha[l]+(n+1)-1.)*unm1-(n+1)*xi*p.ultrasp[i1]) / (p.twoalpha[l]*(1.-xi*xi))
+                for n in range(1, nmax):
+                    i1 = getIndex2D(n+1,l,lmax+1)
+                    i2 = getIndex2D(n,l,lmax+1)
+                    p.ultrasp[i1] = (p.c1[i2]*xi*un - p.c2[i2]*unm1) * p.c3[n]
+                    unm1 = un
+                    un = p.ultrasp[i1]
+                    p.ultrasp1[i1] = ((p.twoalpha[l]+(n+1)-1.)*unm1-(n+1)*xi*p.ultrasp[i1]) / (p.twoalpha[l]*(1.-xi*xi))
 
-        for m in range(0, lmax+1):
-            i1 = getIndex2D(m,m,lmax+1)
-            p.plm[i1] = 1.0
-            if m > 0:
-                p.plm[i1] = (-1.)**m * p.dblfact[m] * sqrt(1.-costh*costh)**m
+            for m in range(0, lmax+1):
+                i1 = getIndex2D(m,m,lmax+1)
+                p.plm[i1] = 1.0
+                if m > 0:
+                    p.plm[i1] = (-1.)**m * p.dblfact[m] * sqrt(1.-costh*costh)**m
 
-            plm1m = p.plm[i1]
-            plm2m = 0.0
+                plm1m = p.plm[i1]
+                plm2m = 0.0
 
-            for l in range(m+1, lmax+1):
-                i2 = getIndex2D(l,m,lmax+1)
-                p.plm[i2] = (costh*(2.*l-1.)*plm1m - (l+m-1.)*plm2m) / (l-m)
-                plm2m = plm1m
-                plm1m = p.plm[i2]
+                for l in range(m+1, lmax+1):
+                    i2 = getIndex2D(l,m,lmax+1)
+                    p.plm[i2] = (costh*(2.*l-1.)*plm1m - (l+m-1.)*plm2m) / (l-m)
+                    plm2m = plm1m
+                    plm1m = p.plm[i2]
 
-        p.dplm[0] = 0.
+            p.dplm[0] = 0.
 
-        for l in range(1, lmax+1):
-            for m in range(0, l+1):
-                i1 = getIndex2D(l,m,lmax+1);
-                if l == m:
-                    p.dplm[i1] = l*costh*p.plm[i1]/(costh*costh-1.0)
-                else:
-                    i2 = getIndex2D(l-1,m,lmax+1);
-                    p.dplm[i1] = (l*costh*p.plm[i1]-(l+m)*p.plm[i2]) / (costh*costh-1.0)
+            for l in range(1, lmax+1):
+                for m in range(0, l+1):
+                    i1 = getIndex2D(l,m,lmax+1);
+                    if l == m:
+                        p.dplm[i1] = l*costh*p.plm[i1]/(costh*costh-1.0)
+                    else:
+                        i2 = getIndex2D(l-1,m,lmax+1);
+                        p.dplm[i1] = (l*costh*p.plm[i1]-(l+m)*p.plm[i2]) / (costh*costh-1.0)
 
-        # HACK: Cython doesn't support step in range
-        count = (lmax-lmin+lskip) // lskip
-        # for l in range(lmin, lmax+1, lskip):
-        for l in range(count):
-            l = lmin + lskip*l
-            temp3 = 0.
-            temp4 = 0.
-            temp5 = 0.
-            temp6 = 0.
+            # HACK: Cython doesn't support step in range
+            count = (lmax-lmin+lskip) // lskip
+            # for l in range(lmin, lmax+1, lskip):
+            for l in range(count):
+                l = lmin + lskip*l
+                temp3 = 0.
+                temp4 = 0.
+                temp5 = 0.
+                temp6 = 0.
 
-            for m in range(0, l+1):
-                clm = 0.
-                dlm = 0.
-                elm = 0.
-                flm = 0.
-                for n in range(0, nmax+1):
-                    i1 = getIndex2D(n,l,lmax+1)
-                    i2 = getIndex3D(n,l,m,lmax+1,lmax+1)
+                for m in range(0, l+1):
+                    clm = 0.
+                    dlm = 0.
+                    elm = 0.
+                    flm = 0.
+                    for n in range(0, nmax+1):
+                        i1 = getIndex2D(n,l,lmax+1)
+                        i2 = getIndex3D(n,l,m,lmax+1,lmax+1)
 
-                    clm = clm + p.ultrasp[i1]*p.cossum[i2]
-                    dlm = dlm + p.ultrasp[i1]*p.sinsum[i2]
-                    elm = elm + p.ultrasp1[i1]*p.cossum[i2]
-                    flm = flm + p.ultrasp1[i1]*p.sinsum[i2]
+                        clm = clm + p.ultrasp[i1]*p.cossum[i2]
+                        dlm = dlm + p.ultrasp[i1]*p.sinsum[i2]
+                        elm = elm + p.ultrasp1[i1]*p.cossum[i2]
+                        flm = flm + p.ultrasp1[i1]*p.sinsum[i2]
 
-                i1 = getIndex2D(l,m,lmax+1)
-                temp3 = temp3 + p.plm[i1]*(clm*cosmphi[m]+dlm*sinmphi[m])
-                temp4 = temp4 - p.plm[i1]*(elm*cosmphi[m]+flm*sinmphi[m])
-                temp5 = temp5 - p.dplm[i1]*(clm*cosmphi[m]+dlm*sinmphi[m])
-                temp6 = temp6 - m*p.plm[i1]*(dlm*cosmphi[m]-clm*sinmphi[m])
+                    i1 = getIndex2D(l,m,lmax+1)
+                    temp3 = temp3 + p.plm[i1]*(clm*cosmphi[m]+dlm*sinmphi[m])
+                    temp4 = temp4 - p.plm[i1]*(elm*cosmphi[m]+flm*sinmphi[m])
+                    temp5 = temp5 - p.dplm[i1]*(clm*cosmphi[m]+dlm*sinmphi[m])
+                    temp6 = temp6 - m*p.plm[i1]*(dlm*cosmphi[m]-clm*sinmphi[m])
 
-            phinltil = r**l / (1.+r)**(2*l+1)
-            b.Epot_bfe[k] = b.Epot_bfe[k] + temp3*phinltil
-            ar = ar + phinltil * (-temp3*(l/r-(2.*l+1.)/(1.+r)) +
-                                  temp4*4.*(2.*l+1.5)/(1.+r)**2)
-            ath = ath + temp5*phinltil
-            aphi = aphi + temp6*phinltil
+                phinltil = r**l / (1.+r)**(2*l+1)
+                b.Epot_bfe[k] = b.Epot_bfe[k] + temp3*phinltil
+                ar = ar + phinltil * (-temp3*(l/r-(2.*l+1.)/(1.+r)) +
+                                      temp4*4.*(2.*l+1.5)/(1.+r)**2)
+                ath = ath + temp5*phinltil
+                aphi = aphi + temp6*phinltil
 
-        cosp = cos(phi)
-        sinp = sin(phi)
+            cosp = cos(phi)
+            sinp = sin(phi)
 
-        sinth = sqrt(1.-costh*costh)
-        ath = -sinth*ath/r
-        aphi = aphi/(r*sinth)
+            sinth = sqrt(1.-costh*costh)
+            ath = -sinth*ath/r
+            aphi = aphi/(r*sinth)
 
-        b.ax[k] = config.G*(sinth*cosp*ar + costh*cosp*ath - sinp*aphi)
-        b.ay[k] = config.G*(sinth*sinp*ar + costh*sinp*ath + cosp*aphi)
-        b.az[k] = config.G*(costh*ar - sinth*ath)
-        b.Epot_bfe[k] = b.Epot_bfe[k]*config.G
+            b.ax[k] = config.G*(sinth*cosp*ar + costh*cosp*ath - sinp*aphi)
+            b.ay[k] = config.G*(sinth*sinp*ar + costh*sinp*ath + cosp*aphi)
+            b.az[k] = config.G*(costh*ar - sinth*ath)
+            b.Epot_bfe[k] = b.Epot_bfe[k]*config.G
 
 cdef void external_field(Config config, Bodies b, COMFrame *f,
                          CPotential *pot, double strength, double *tnow):

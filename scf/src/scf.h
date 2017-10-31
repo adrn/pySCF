@@ -70,19 +70,3 @@ typedef struct {
     double vz;
     int *pot_idx; // used for sorting particles on how bound they are
 } COMFrame; // Center-of-mass reference frame
-
-// extern void accp_firstc(Config config, Placeholders p);
-
-// extern void acc_pot(Config config, Bodies b, Placeholders p, COMFrame f,
-//                     double extern_strength, int *firstc);
-
-// extern void frame(int iter, Config config, Bodies b, COMFrame f);
-
-// extern void step_vel(Config config, Bodies b, double dt,
-//                      double *tnow, double *tvel);
-
-// extern void tidal_start(Config config, Bodies b, Placeholders p, COMFrame f,
-//                         double *tnow, double *tpos, double *tvel);
-
-// extern void step_system(int iter, Config config, Bodies b, Placeholders p,
-//                         double *tnow, double *tpos, double *tvel);

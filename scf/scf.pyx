@@ -26,6 +26,7 @@ from gala.potential.potential.cpotential cimport CPotentialWrapper
 
 from .log import logger
 from .acceleration cimport update_acceleration
+from .progenitor cimport recenter_frame, check_progenitor, tidal_start
 
 cdef extern from "math.h":
     double sqrt(double)
@@ -109,7 +110,7 @@ cdef extern from "src/scf.h":
     #                          double extern_strength, double *tnow,
     #                          int *firstc) nogil
 
-    void recenter_frame(int iter, Config config, Bodies b, COMFrame *f) nogil
+    # void recenter_frame(int iter, Config config, Bodies b, COMFrame *f) nogil
 
     void step_vel(Config config, Bodies b, double dt,
                   double *tnow, double *tvel) nogil
@@ -117,16 +118,16 @@ cdef extern from "src/scf.h":
     void step_pos(Config config, Bodies b, double dt,
                   double *tnow, double *tvel) nogil
 
-    void tidal_start(int iter, Config config, Bodies b, Placeholders p,
-                     COMFrame *f, CPotential *pot,
-                     double *tnow, double *tpos, double *tvel) nogil
+    # void tidal_start(int iter, Config config, Bodies b, Placeholders p,
+    #                  COMFrame *f, CPotential *pot,
+    #                  double *tnow, double *tpos, double *tvel) nogil
 
     # void step_system(int iter, Config config, Bodies b, Placeholders p,
     #                  COMFrame *f, CPotential *pot,
     #                  double *tnow, double *tpos, double *tvel) nogil
 
-    void check_progenitor(int iter, Config config, Bodies b, Placeholders p,
-                          COMFrame *f, CPotential *pot, double *tnow) nogil
+    # void check_progenitor(int iter, Config config, Bodies b, Placeholders p,
+    #                       COMFrame *f, CPotential *pot, double *tnow) nogil
 
 # needed for some reason
 cdef extern from "src/helpers.h":

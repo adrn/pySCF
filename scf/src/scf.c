@@ -7,6 +7,63 @@
 #include "helpers.h"
 #include "scf.h"
 
+void internal_bfe_init(Config config, Placeholders p) {
+    /*
+    This code follows the "if (firstc)" block of the original Fortran
+    implementation of SCF. This just initializes values for arrays of
+    coefficients needed for the basis function expansion.
+    */
+    int n,l,m,idx;
+    double knl, arggam, deltam0;
+
+    p.dblfact[1] = 1.;
+    for (l=2; l<=config.lmax; l++) {
+        p.dblfact[l] = p.dblfact[l-1]*(2.*l-1.);
+    }
+
+    for (n=0; n<=config.nmax; n++) {
+        for (l=0; l <= config.lmax; l++) {
+            knl = 0.5*n*(n+4.*l+3.)+(l+1.)*(2.*l+1.);
+
+            idx = getIndex2D(n,l,config.lmax+1);
+            p.anltilde[idx] = -pow(2.,(8.*l+6.)) * gsl_sf_fact(n)*(n+2.*l+1.5);
+            p.anltilde[idx] = p.anltilde[idx] * pow(gsl_sf_gamma(2*l + 1.5), 2);
+            p.anltilde[idx] = p.anltilde[idx] / (4.*M_PI*knl*gsl_sf_fact(n+4*l+2));
+        }
+    }
+
+    for (l=0; l <= config.lmax; l++) {
+        p.twoalpha[l] = 2.*(2.*l+1.5);
+        for (m=0; m<=l; m++) {
+            deltam0 = 2.;
+            if (m == 0)
+                deltam0 = 1.;
+
+            idx = getIndex2D(l,m,config.lmax+1);
+            p.coeflm[idx] = (2.*l+1.) * deltam0 * gsl_sf_fact(l-m) / gsl_sf_fact(l+m);
+        }
+    }
+
+    for (n=1; n<=config.nmax; n++) {
+        p.c3[n] = 1. / (n+1.);
+        for (l=0; l<=config.lmax; l++) {
+            idx = getIndex2D(n,l,config.lmax+1);
+            p.c1[idx] = 2.0*n + p.twoalpha[l];
+            p.c2[idx] = n-1.0 + p.twoalpha[l];
+        }
+    }
+
+    *(p.lskip) = 1;
+    if (config.zeroodd || config.zeroeven) {
+        *(p.lskip) = 2;
+    }
+
+    *(p.lmin) = 0;
+    if (config.zeroeven) {
+        *(p.lmin) = 1;
+    }
+}
+
 void recenter_frame(int iter, Config config, Bodies b, COMFrame *f) {
     /*
     Recompute the center-of-mass frame.
