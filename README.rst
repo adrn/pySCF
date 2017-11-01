@@ -52,4 +52,4 @@ Use the standard::
 License
 =======
 
-MIT: see the [license file.](https://github.com/adrn/scf/blob/master/LICENSE)
+MIT: see the `license file <https://github.com/adrn/scf/blob/master/LICENSE>`_.
