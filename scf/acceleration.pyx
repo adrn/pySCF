@@ -14,90 +14,20 @@ import cython
 cimport cython
 from cython.parallel import parallel, prange
 
-cdef extern from "math.h":
-    double sqrt(double) nogil
-    double atan2(double, double) nogil
-    double cos(double) nogil
-    double sin(double) nogil
+from libc.math cimport sin, cos, atan2, sqrt, M_PI
+from cython_gsl cimport gsl_sf_fact, gsl_sf_gamma
 
-cdef extern from "potential/src/cpotential.h":
-    ctypedef struct CPotential:
-        pass
+from gala.potential.potential.cpotential cimport (CPotential,
+                                                  c_potential,
+                                                  c_gradient)
+# cdef extern from "potential/src/cpotential.h":
+#     ctypedef struct CPotential:
+#         pass
 
-    double c_potential(CPotential *p, double t, double *q) nogil
-    void c_gradient(CPotential *p, double t, double *q, double *grad) nogil
+#     double c_potential(CPotential *p, double t, double *q) nogil
+#     void c_gradient(CPotential *p, double t, double *q, double *grad) nogil
 
-cdef extern from "src/scf.h":
-    ctypedef struct Config:
-        int n_steps
-        double dt
-        double t0
-        int n_bodies
-        int n_recenter
-        int n_snapshot
-        int n_tidal
-        int nmax
-        int lmax
-        int zeroodd
-        int zeroeven
-        int selfgravitating
-        double ru
-        double mu
-        double vu
-        double tu
-        double G
-
-    ctypedef struct Placeholders:
-        double *dblfact
-        double *twoalpha
-        double *anltilde
-        double *coeflm
-        double *plm
-        double *dplm
-        double *ultrasp
-        double *ultraspt
-        double *ultrasp1
-        double *sinsum
-        double *cossum
-        double *c1
-        double *c2
-        double *c3
-        int *lmin
-        int *lskip
-        double *pot0
-        double *kin0
-        double *ax0
-        double *ay0
-        double *az0
-
-    ctypedef struct Bodies:
-        double *x
-        double *y
-        double *z
-        double *vx
-        double *vy
-        double *vz
-        double *ax
-        double *ay
-        double *az
-        double *Epot_ext;
-        double *Epot_bfe;
-        double *Ekin;
-        double *mass
-        int *ibound
-        double *tub
-
-    ctypedef struct COMFrame:
-        double m_prog
-        double x
-        double y
-        double z
-        double vx
-        double vy
-        double vz
-        int *pot_idx
-
-    void internal_bfe_init(Config config, Placeholders p) nogil
+from structs cimport Config, Placeholders, Bodies, COMFrame
 
 # needed for some reason
 cdef extern from "src/helpers.h":
@@ -106,6 +36,54 @@ cdef extern from "src/helpers.h":
     int getIndex3D(int row, int col, int dep, int ncol, int ndep) nogil
 
 # ----------------------------------------------------------------------------
+
+cdef void internal_bfe_init(Config config, Placeholders p):
+    """
+    This code follows the "if (firstc)" block of the original Fortran
+    implementation of SCF. This just initializes values for arrays of
+    coefficients needed for the basis function expansion.
+    """
+    cdef:
+        int n,l,m,idx
+        double knl, arggam, deltam0
+
+    p.dblfact[1] = 1.
+    for l in range(2, config.lmax+1):
+        p.dblfact[l] = p.dblfact[l-1]*(2.*l-1.)
+
+    for n in range(config.nmax+1):
+        for l in range(0, config.lmax+1):
+            knl = 0.5*n*(n+4.*l+3.)+(l+1.)*(2.*l+1.)
+
+            idx = getIndex2D(n,l,config.lmax+1)
+            p.anltilde[idx] = -pow(2.,(8.*l+6.)) * gsl_sf_fact(n)*(n+2.*l+1.5)
+            p.anltilde[idx] = p.anltilde[idx] * pow(gsl_sf_gamma(2*l + 1.5), 2)
+            p.anltilde[idx] = p.anltilde[idx] / (4.*M_PI*knl*gsl_sf_fact(n+4*l+2))
+
+    for l in range(0, config.lmax+1):
+        p.twoalpha[l] = 2.*(2.*l+1.5)
+        for m in range(0, l+1):
+            deltam0 = 2.
+            if m == 0:
+                deltam0 = 1.
+
+            idx = getIndex2D(l, m, config.lmax+1)
+            p.coeflm[idx] = (2.*l+1.) * deltam0 * gsl_sf_fact(l-m) / gsl_sf_fact(l+m);
+
+    for n in range(1, config.nmax+1):
+        p.c3[n] = 1. / (n+1.)
+        for l in range(0, config.lmax+1):
+            idx = getIndex2D(n, l, config.lmax+1)
+            p.c1[idx] = 2.0*n + p.twoalpha[l]
+            p.c2[idx] = n-1.0 + p.twoalpha[l]
+
+    p.lskip[0] = 1
+    if config.zeroodd or config.zeroeven:
+        p.lskip[0] = 2
+
+    p.lmin[0] = 0
+    if config.zeroeven:
+        p.lmin[0] = 1
 
 cdef void internal_bfe_field(Config config, Bodies b, Placeholders p,
                              int *firstc):
