@@ -1,7 +1,7 @@
 from copy import deepcopy
 from os import path
 from distutils.core import Extension
-from astropy_helpers import setup_helpers
+from astropy_helpers import setup_helpers, openmp_helpers
 
 def get_extensions():
 
@@ -33,10 +33,11 @@ def get_extensions():
     base_cfg['extra_compile_args'].append('--std=gnu99')
 
     # acceleration.pyx
-    # cfg = {(k,v) for k,v in base_cfg.items()}
     cfg = deepcopy(dict(base_cfg))
     cfg['sources'].append('scf/acceleration.pyx')
-    exts.append(Extension('scf.acceleration', **cfg))
+    ext = Extension('scf.acceleration', **cfg)
+    openmp_helpers.add_openmp_flags_if_available(ext)
+    exts.append(ext)
 
     # progenitor.pyx
     cfg = deepcopy(dict(base_cfg))
