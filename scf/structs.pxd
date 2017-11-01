@@ -71,3 +71,9 @@ cdef extern from "src/scf.h" nogil:
         double vy
         double vz
         int *pot_idx
+
+    void step_pos(Config config, Bodies b, double dt,
+                  double *tnow, double *tvel) nogil
+
+    void step_vel(Config config, Bodies b, double dt,
+                  double *tnow, double *tvel) nogil
