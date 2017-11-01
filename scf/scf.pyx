@@ -105,29 +105,11 @@ cdef extern from "src/scf.h":
         double vz
         int *pot_idx
 
-    # void update_acceleration(Config config, Bodies b, Placeholders p,
-    #                          COMFrame *f, CPotential *pot,
-    #                          double extern_strength, double *tnow,
-    #                          int *firstc) nogil
-
-    # void recenter_frame(int iter, Config config, Bodies b, COMFrame *f) nogil
-
     void step_vel(Config config, Bodies b, double dt,
                   double *tnow, double *tvel) nogil
 
     void step_pos(Config config, Bodies b, double dt,
                   double *tnow, double *tvel) nogil
-
-    # void tidal_start(int iter, Config config, Bodies b, Placeholders p,
-    #                  COMFrame *f, CPotential *pot,
-    #                  double *tnow, double *tpos, double *tvel) nogil
-
-    # void step_system(int iter, Config config, Bodies b, Placeholders p,
-    #                  COMFrame *f, CPotential *pot,
-    #                  double *tnow, double *tpos, double *tvel) nogil
-
-    # void check_progenitor(int iter, Config config, Bodies b, Placeholders p,
-    #                       COMFrame *f, CPotential *pot, double *tnow) nogil
 
 # needed for some reason
 cdef extern from "src/helpers.h":
