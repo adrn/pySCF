@@ -13,19 +13,19 @@ np.import_array()
 import cython
 cimport cython
 
+from libc.math cimport fabs, atan2, sqrt
+
+from gala.potential.potential.cpotential cimport (CPotential,
+                                                  c_potential,
+                                                  c_gradient)
+# cdef extern from "potential/src/cpotential.h":
+#     ctypedef struct CPotential:
+#         pass
+
+#     double c_potential(CPotential *p, double t, double *q) nogil
+#     void c_gradient(CPotential *p, double t, double *q, double *grad) nogil
+
 from .acceleration cimport update_acceleration
-
-cdef extern from "math.h":
-    double sqrt(double) nogil
-    double fabs(double) nogil
-    double atan2(double, double) nogil
-
-cdef extern from "potential/src/cpotential.h":
-    ctypedef struct CPotential:
-        pass
-
-    double c_potential(CPotential *p, double t, double *q) nogil
-    void c_gradient(CPotential *p, double t, double *q, double *grad) nogil
 
 cdef extern from "src/scf.h":
     ctypedef struct Config:
@@ -263,7 +263,9 @@ cdef void tidal_start(int iter, Config config, Bodies b, Placeholders p,
     Slowly ramp up the tidal field.
     """
     cdef:
-        double v_cm[3], a_cm[3], mtot, t_tidal, strength
+        double v_cm[3]
+        double a_cm[3]
+        double mtot, t_tidal, strength
         int i,k
         int not_firstc = 0
 
