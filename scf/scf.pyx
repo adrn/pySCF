@@ -322,9 +322,9 @@ def run_scf(CPotentialWrapper cp,
                pos=np.vstack((np.array(x) + f.x,
                               np.array(y) + f.y,
                               np.array(z) + f.z)),
-               vel=np.vstack((np.array(vx),
-                              np.array(vy),
-                              np.array(vz))),
+               vel=np.vstack((np.array(vx) + f.vx,
+                              np.array(vy) + f.vy,
+                              np.array(vz) + f.vz)),
                tub=tub)
 
     # Reset the velocities to being 1/2 step ahead of the positions
@@ -359,8 +359,12 @@ def run_scf(CPotentialWrapper cp,
 
         if config.n_snapshot > 0 and (((i+1) % config.n_snapshot) == 0 and i > 0):
             write_snap(output_file, i+1, j, t=tnow,
-                       pos=np.vstack((np.array(x)+f.x, np.array(y)+f.y, np.array(z)+f.z)),
-                       vel=np.vstack((np.array(vx), np.array(vy), np.array(vz))),
+                       pos=np.vstack((np.array(x) + f.x,
+                                      np.array(y) + f.y,
+                                      np.array(z) + f.z)),
+                       vel=np.vstack((np.array(vx) + f.vx,
+                                      np.array(vy) + f.vy,
+                                      np.array(vz) + f.vz)),
                        tub=tub)
             j += 1
             wrote = True
@@ -373,8 +377,12 @@ def run_scf(CPotentialWrapper cp,
     # Always write the last timestep (if it wasn't written already), even if n_snapshot==0
     if not wrote:
         write_snap(output_file, i+1, j, t=tnow,
-                   pos=np.vstack((np.array(x)+f.x, np.array(y)+f.y, np.array(z)+f.z)),
-                   vel=np.vstack((np.array(vx), np.array(vy), np.array(vz))),
+                   pos=np.vstack((np.array(x) + f.x,
+                                  np.array(y) + f.y,
+                                  np.array(z) + f.z)),
+                   vel=np.vstack((np.array(vx) + f.vx,
+                                  np.array(vy) + f.vy,
+                                  np.array(vz) + f.vz)),
                    tub=tub)
 
     with h5py.File(output_file, 'r+') as out_f:
