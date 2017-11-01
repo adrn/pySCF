@@ -29,11 +29,11 @@ With anaconda, you can install GSL with::
 
 To build and install ``pySCF``, you'll also need (at minimum):
 
-    - cython
-    - cython_gsl
-    - numpy
-    - astropy
-    - gala
+    - `cython <https://github.com/cython/cython>`_
+    - `cython_gsl <https://github.com/twiecki/CythonGSL>`_
+    - `numpy <https://github.com/numpy/numpy>`_
+    - `astropy <https://github.com/astropy/astropy>`_
+    - `gala <https://github.com/adrn/gala>`_
 
 For `conda <http://anaconda.org>`_ users, see the `environment.yml
 <https://github.com/adrn/scf/blob/master/environment.yml>`_ file for a list of
