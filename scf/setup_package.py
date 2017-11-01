@@ -41,13 +41,13 @@ def get_extensions():
     # progenitor.pyx
     cfg = deepcopy(dict(base_cfg))
     cfg['sources'].append('scf/progenitor.pyx')
-    cfg['sources'].append('scf/src/leapfrog.c')
+    # cfg['sources'].append('scf/src/leapfrog.c')
     exts.append(Extension('scf.progenitor', **cfg))
 
     # scf.pyx
     cfg = deepcopy(dict(base_cfg))
     cfg['sources'].append('scf/scf.pyx')
-    cfg['sources'].append('scf/src/leapfrog.c')
+    # cfg['sources'].append('scf/src/leapfrog.c')
     exts.append(Extension('scf.scf', **cfg))
 
     return exts

@@ -20,12 +20,6 @@ from cython_gsl cimport gsl_sf_fact, gsl_sf_gamma
 from gala.potential.potential.cpotential cimport (CPotential,
                                                   c_potential,
                                                   c_gradient)
-# cdef extern from "potential/src/cpotential.h":
-#     ctypedef struct CPotential:
-#         pass
-
-#     double c_potential(CPotential *p, double t, double *q) nogil
-#     void c_gradient(CPotential *p, double t, double *q, double *grad) nogil
 
 from structs cimport Config, Placeholders, Bodies, COMFrame
 

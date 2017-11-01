@@ -2,7 +2,7 @@ cdef extern from "potential/src/cpotential.h" nogil:
     ctypedef struct CPotential:
         pass
 
-cdef extern from "src/scf.h" nogil:
+cdef extern from "src/structs.h" nogil:
     ctypedef struct Config:
         int n_steps
         double dt
@@ -72,6 +72,7 @@ cdef extern from "src/scf.h" nogil:
         double vz
         int *pot_idx
 
+cdef extern from "src/leapfrog.c" nogil:
     void step_pos(Config config, Bodies b, double dt,
                   double *tnow, double *tvel) nogil
 
