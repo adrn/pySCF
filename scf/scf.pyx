@@ -280,7 +280,7 @@ def run_scf(CPotentialWrapper cp,
     # Compute initial (internal) kinetic energy of particles, add progenitor
     # velocity to particle velocities
     for i in range(N):
-        Ekin[i] = 0.5 * (vx[i]*vx[i] + vy[i]*vy[i] + vz[i]*vz[i]);
+        Ekin[i] = 0.5 * (vx[i]*vx[i] + vy[i]*vy[i] + vz[i]*vz[i])
 
     update_acceleration(config, b, p, &f, &(cp.cpotential), extern_strength,
                         &tnow, &firstc)
@@ -305,7 +305,7 @@ def run_scf(CPotentialWrapper cp,
         PyErr_CheckSignals() # check for keyboard interrupts
         tidal_start(i, config, b, p, &f,
                     &(cp.cpotential), &tnow, &tpos, &tvel)
-        logger.debug("Tidal start: {}".format(i+1));
+        logger.debug("Tidal start: {}".format(i+1))
 
     # Synchronize the velocities with the positions
     step_vel(config, b, -0.5*config.dt, &tnow, &tvel)

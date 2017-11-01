@@ -119,13 +119,13 @@ cdef void check_progenitor(int iter, Config config, Bodies b, Placeholders p,
     """
 
     cdef:
-        double m_prog = 10000000000.;
-        double m_safe;
-        double vx_rel, vy_rel, vz_rel;
-        int k,n;
-        int N_MASS_ITER = 30; # TODO: set in config?
-        int not_firstc = 0;
-        int broke = 0;
+        double m_prog = 10000000000.
+        double m_safe
+        double vx_rel, vy_rel, vz_rel
+        int k,n
+        int N_MASS_ITER = 30 # TODO: set in config?
+        int not_firstc = 0
+        int broke = 0
 
     for k in range(config.n_bodies):
         vx_rel = b.vx[k] - f.vx

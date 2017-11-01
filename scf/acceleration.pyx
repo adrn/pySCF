@@ -62,7 +62,7 @@ cdef void internal_bfe_init(Config config, Placeholders p):
                 deltam0 = 1.
 
             idx = getIndex2D(l, m, config.lmax+1)
-            p.coeflm[idx] = (2.*l+1.) * deltam0 * gsl_sf_fact(l-m) / gsl_sf_fact(l+m);
+            p.coeflm[idx] = (2.*l+1.) * deltam0 * gsl_sf_fact(l-m) / gsl_sf_fact(l+m)
 
     for n in range(1, config.nmax+1):
         p.c3[n] = 1. / (n+1.)
@@ -264,11 +264,11 @@ cdef void internal_bfe_field(Config config, Bodies b, Placeholders p,
 
             for l in range(1, lmax+1):
                 for m in range(0, l+1):
-                    i1 = getIndex2D(l,m,lmax+1);
+                    i1 = getIndex2D(l,m,lmax+1)
                     if l == m:
                         p.dplm[i1] = l*costh*p.plm[i1]/(costh*costh-1.0)
                     else:
-                        i2 = getIndex2D(l-1,m,lmax+1);
+                        i2 = getIndex2D(l-1,m,lmax+1)
                         p.dplm[i1] = (l*costh*p.plm[i1]-(l+m)*p.plm[i2]) / (costh*costh-1.0)
 
             # HACK: Cython doesn't support step in range
@@ -375,10 +375,10 @@ cdef void update_acceleration(Config config, Bodies b, Placeholders p,
 
     else:
         for k in range(config.n_bodies):
-            b.ax[k] = 0.;
-            b.ay[k] = 0.;
-            b.az[k] = 0.;
-            b.Epot_ext[k] = 0.;
-            b.Epot_bfe[k] = 0.;
+            b.ax[k] = 0.
+            b.ay[k] = 0.
+            b.az[k] = 0.
+            b.Epot_ext[k] = 0.
+            b.Epot_bfe[k] = 0.
 
         external_field(config, b, f, pot, extern_strength, tnow)
