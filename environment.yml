@@ -1,0 +1,19 @@
+name: scf
+
+channels:
+  - astropy
+
+dependencies:
+  - python=3
+  - astropy
+  - numpy
+  - scipy
+  - matplotlib
+  - cython
+  - h5py
+  - pip:
+    - cythongsl
+    - schwimmbad
+    - git+https://github.com/adrn/gala
+    - git+https://github.com/adrn/biff
+
