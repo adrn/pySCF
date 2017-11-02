@@ -37,18 +37,44 @@ cdef extern from "src/helpers.h":
 
 # ----------------------------------------------------------------------------
 
-def write_snap(output_file, i, j, t, pos, vel, tub):
+def write_snap(output_file, i, j, t, xyz_in, vxyz_in, tub, frame_xyz, frame_vxyz,
+               Ekin, Epot_bfe, Epot_ext,
+               write_energy=False, output_dtype=np.float64):
+
+    """
+    Write a simulation snapshop.
+
+    Parameters
+    ----------
+    xyz_in : tuple
+        Positions within the satellite.
+    vxyz_in : tuple
+        Velocities within the satellite.
+    """
+
+    xyz = np.vstack((np.array(xyz_in[0]) + frame_xyz[0],
+                     np.array(xyz_in[1]) + frame_xyz[1],
+                     np.array(xyz_in[2]) + frame_xyz[2])).astype(output_dtype)
+    vxyz = np.vstack((np.array(vxyz_in[0]) + frame_vxyz[0],
+                      np.array(vxyz_in[1]) + frame_vxyz[1],
+                      np.array(vxyz_in[2]) + frame_vxyz[2])).astype(output_dtype)
+
     # save snapshot to output file
-    # TODO: add option to write out energies as well
     with h5py.File(output_file, 'r+') as out_f:
-        g = out_f.create_group('/snapshots/{}'.format(j))
+        g = out_f.create_group('/snapshots/{0}'.format(j))
         g.attrs['t'] = t
         g.attrs['step'] = i
-        g.create_dataset('pos', dtype=np.float64, shape=pos.shape, data=pos)
-        g.create_dataset('vel', dtype=np.float64, shape=vel.shape, data=vel)
-        g.create_dataset('tub', dtype=np.float64, shape=tub.shape, data=tub)
+        g.create_dataset('pos', data=xyz)
+        g.create_dataset('vel', data=vxyz)
+        g.create_dataset('tub', data=np.array(tub).astype(output_dtype))
 
-    logger.debug("\t...wrote snapshot {} to output file".format(j))
+        if write_energy:
+            eg = g.create_group('energy')
+            eg.create_dataset('kinetic', data=np.array(Ekin).astype(output_dtype))
+            eg.create_dataset('potential_int', data=np.array(Epot_bfe).astype(output_dtype))
+            eg.create_dataset('potential_ext', data=np.array(Epot_ext).astype(output_dtype))
+
+    logger.debug("\t...wrote snapshot {0} to output file".format(j))
 
 cdef void step_system(int iter, Config config, Bodies b, Placeholders p, COMFrame *f,
                       CPotential *pot, double *tnow, double *tpos, double *tvel):
@@ -76,7 +102,8 @@ cdef void step_system(int iter, Config config, Bodies b, Placeholders p, COMFram
 def run_scf(CPotentialWrapper cp,
             w0, bodies, mass_scale, length_scale,
             dt, n_steps, t0, n_snapshot, n_recenter, n_tidal,
-            nmax, lmax, zero_odd, zero_even, self_gravity, output_file):
+            nmax, lmax, zero_odd, zero_even, self_gravity, output_file,
+            write_energy):
     cdef:
         int firstc = 1
         Config config
@@ -318,14 +345,11 @@ def run_scf(CPotentialWrapper cp,
     check_progenitor(0, config, b, p, &f, &(cp.cpotential), &tnow)
 
     # Write initial positions out after tidal start
-    write_snap(output_file, i=0, j=0, t=tnow,
-               pos=np.vstack((np.array(x) + f.x,
-                              np.array(y) + f.y,
-                              np.array(z) + f.z)),
-               vel=np.vstack((np.array(vx) + f.vx,
-                              np.array(vy) + f.vy,
-                              np.array(vz) + f.vz)),
-               tub=tub)
+    write_snap(output_file, i=0, j=0, t=tnow, tub=tub,
+               xyz_in=(x, y, z), vxyz_in=(vx, vy, vz),
+               frame_xyz=(f.x,f.y,f.z), frame_vxyz=(f.vx,f.vy,f.vz),
+               Ekin=Ekin, Epot_bfe=Epot_bfe, Epot_ext=Epot_ext,
+               write_energy=write_energy)
 
     # Reset the velocities to being 1/2 step ahead of the positions
     step_vel(config, b, 0.5*config.dt, &tnow, &tvel)
@@ -358,14 +382,11 @@ def run_scf(CPotentialWrapper cp,
         logger.debug("Fraction of progenitor mass bound: {:.5f}".format(f.m_prog))
 
         if config.n_snapshot > 0 and (((i+1) % config.n_snapshot) == 0 and i > 0):
-            write_snap(output_file, i+1, j, t=tnow,
-                       pos=np.vstack((np.array(x) + f.x,
-                                      np.array(y) + f.y,
-                                      np.array(z) + f.z)),
-                       vel=np.vstack((np.array(vx) + f.vx,
-                                      np.array(vy) + f.vy,
-                                      np.array(vz) + f.vz)),
-                       tub=tub)
+            write_snap(output_file, i+1, j, t=tnow, tub=tub,
+                       xyz_in=(x, y, z), vxyz_in=(vx, vy, vz),
+                       frame_xyz=(f.x,f.y,f.z), frame_vxyz=(f.vx,f.vy,f.vz),
+                       Ekin=Ekin, Epot_bfe=Epot_bfe, Epot_ext=Epot_ext,
+                       write_energy=write_energy)
             j += 1
             wrote = True
 
@@ -376,14 +397,11 @@ def run_scf(CPotentialWrapper cp,
 
     # Always write the last timestep (if it wasn't written already), even if n_snapshot==0
     if not wrote:
-        write_snap(output_file, i+1, j, t=tnow,
-                   pos=np.vstack((np.array(x) + f.x,
-                                  np.array(y) + f.y,
-                                  np.array(z) + f.z)),
-                   vel=np.vstack((np.array(vx) + f.vx,
-                                  np.array(vy) + f.vy,
-                                  np.array(vz) + f.vz)),
-                   tub=tub)
+        write_snap(output_file, i+1, j, t=tnow, tub=tub,
+                   xyz_in=(x, y, z), vxyz_in=(vx, vy, vz),
+                   frame_xyz=(f.x,f.y,f.z), frame_vxyz=(f.vx,f.vy,f.vz),
+                   Ekin=Ekin, Epot_bfe=Epot_bfe, Epot_ext=Epot_ext,
+                   write_energy=write_energy)
 
     with h5py.File(output_file, 'r+') as out_f:
         out_f.create_dataset('/cen/pos', dtype=np.float64, shape=np.array(frame_xyz).shape,

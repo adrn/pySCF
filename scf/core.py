@@ -44,13 +44,15 @@ class SCFSimulation(object):
     zero_even : bool (optional)
         Set all even terms in the basis function expansion of the satellite
         potential (default = False).
+    write_energy : bool (optional)
+        Also output energies, useful for debugging.
     """
 
     @u.quantity_input(mass_scale=u.Msun, length_scale=u.kpc)
     def __init__(self, bodies, potential, mass_scale, length_scale,
                  self_gravity=True, nmax=6, lmax=4,
                  zero_odd=False, zero_even=False,
-                 output_path=None):
+                 output_path=None, write_energy=False):
 
         if not isinstance(bodies, gd.PhaseSpacePosition):
             raise ValueError("bodies must be a PhaseSpacePosition instance.")
@@ -80,6 +82,8 @@ class SCFSimulation(object):
         Potential = self.potential.__class__
         self._potential = Potential(units=self.units,
                                     **self.potential.parameters)
+
+        self.write_energy = write_energy
 
     # @u.quantity_input(dt=u.Myr)
     def run(self, w0, dt, n_steps, t0=0.,
@@ -137,7 +141,8 @@ class SCFSimulation(object):
                 n_snapshot=n_snapshot, n_recenter=n_recenter, n_tidal=n_tidal,
                 nmax=self.nmax, lmax=self.lmax,
                 zero_odd=self.zero_odd, zero_even=self.zero_even,
-                self_gravity=self.self_gravity, output_file=output_file)
+                self_gravity=self.self_gravity, output_file=output_file,
+                write_energy=self.write_energy)
 
     @staticmethod
     def units_from_scales(mass_scale, length_scale):

@@ -320,6 +320,9 @@ cdef void internal_bfe_field(Config config, Bodies b, Placeholders p,
             b.az[k] = config.G*(costh*ar - sinth*ath)
             b.Epot_bfe[k] = b.Epot_bfe[k]*config.G
 
+            # Update kinetic energy
+            b.Ekin[k] = 0.5*(b.vx[k]*b.vx[k] + b.vy[k]*b.vy[k] + b.vz[k]*b.vz[k])
+
 cdef void external_field(Config config, Bodies b, COMFrame *f,
                          CPotential *pot, double strength, double *tnow):
     """
