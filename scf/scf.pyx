@@ -37,7 +37,7 @@ cdef extern from "src/helpers.h":
 
 # ----------------------------------------------------------------------------
 
-def write_snap(output_file, i, j, t, xyz_in, vxyz_in, tub, frame_xyz, frame_vxyz,
+def write_snap(output_file, i, j, t, xyz, vxyz, tub,
                Ekin, Epot_bfe, Epot_ext,
                write_energy=False, output_dtype=np.float64):
 
@@ -46,18 +46,16 @@ def write_snap(output_file, i, j, t, xyz_in, vxyz_in, tub, frame_xyz, frame_vxyz
 
     Parameters
     ----------
-    xyz_in : tuple
-        Positions within the satellite.
-    vxyz_in : tuple
-        Velocities within the satellite.
+    xyz : tuple
+    vxyz : tuple
     """
 
-    xyz = np.vstack((np.array(xyz_in[0]) + frame_xyz[0],
-                     np.array(xyz_in[1]) + frame_xyz[1],
-                     np.array(xyz_in[2]) + frame_xyz[2])).astype(output_dtype)
-    vxyz = np.vstack((np.array(vxyz_in[0]) + frame_vxyz[0],
-                      np.array(vxyz_in[1]) + frame_vxyz[1],
-                      np.array(vxyz_in[2]) + frame_vxyz[2])).astype(output_dtype)
+    xyz = np.vstack((np.array(xyz[0]),
+                     np.array(xyz[1]),
+                     np.array(xyz[2]))).astype(output_dtype)
+    vxyz = np.vstack((np.array(vxyz[0]),
+                      np.array(vxyz[1]),
+                      np.array(vxyz[2]))).astype(output_dtype)
 
     # save snapshot to output file
     with h5py.File(output_file, 'r+') as out_f:
@@ -76,6 +74,8 @@ def write_snap(output_file, i, j, t, xyz_in, vxyz_in, tub, frame_xyz, frame_vxyz
 
     logger.debug("Writing snapshot {0}".format(j))
 
+# TODO: here we should only move the velocity by a half step to avoid the extra
+# step_vel calls in run_scf below!
 cdef void step_system(int iter, Config config, Bodies b, Placeholders p, COMFrame *f,
                       CPotential *pot, double *tnow, double *tpos, double *tvel, int n_recenter):
     cdef:
@@ -242,8 +242,7 @@ def run_scf(CPotentialWrapper cp,
     f.pot_idx = &pot_idx[0]
 
     # The N bodies: pointers to arrays containing initial conditions, etc.
-    # Note that the positions (x,y,z) and velocities (vx,vy,vz) are *relative to
-    # the center of mass frame*
+    # Note that the positions (x,y,z) and velocities (vx,vy,vz) are *absolute*
     b.x = &x[0]
     b.y = &y[0]
     b.z = &z[0]
@@ -293,6 +292,8 @@ def run_scf(CPotentialWrapper cp,
 
     # ------------------------------------------------------------------------
     # This stuff follows `initsys` in the original FORTRAN implementation
+    # At this point, the particle positions and velocities are relative and
+    # don't include the motion of the satellite itself.
 
     tnow = config.t0
     tpos = tnow
@@ -307,11 +308,30 @@ def run_scf(CPotentialWrapper cp,
     f.vy = f.vy / config.vu
     f.vz = f.vz / config.vu
 
-    # Compute initial (internal) kinetic energy of particles, add progenitor
-    # velocity to particle velocities
-    for i in range(N):
-        Ekin[i] = 0.5 * (vx[i]*vx[i] + vy[i]*vy[i] + vz[i]*vz[i])
+    frame_xyz[0,0] = f.x
+    frame_xyz[1,0] = f.y
+    frame_xyz[2,0] = f.z
+    frame_vxyz[0,0] = f.vx
+    frame_vxyz[1,0] = f.vy
+    frame_vxyz[2,0] = f.vz
 
+    # Compute initial (internal) kinetic energy of particles, add progenitor
+    # velocity to particle velocities. Note the velocities at this point are
+    # relative to the satellite frame - we add the frame velocity and position
+    # now:
+    for i in range(N):
+        Ekin[i] = 0.5 * (vx[i]**2 + vy[i]**2 + vz[i]**2)
+
+        b.x[i] = b.x[i] + f.x
+        b.y[i] = b.y[i] + f.y
+        b.z[i] = b.z[i] + f.z
+
+        b.vx[i] = b.vx[i] + f.vx
+        b.vy[i] = b.vy[i] + f.vy
+        b.vz[i] = b.vz[i] + f.vz
+
+    # Initialize accleration arrats (but external field might be zero if we are
+    # doing tidal start)
     update_acceleration(config, b, p, &f, &(cp.cpotential), extern_strength,
                         &tnow, &firstc)
 
@@ -323,13 +343,13 @@ def run_scf(CPotentialWrapper cp,
         pot_idx[i] = tmp[i]
     recenter_frame(config, b, &f)
 
-    # Initialize velocities (take a half step in time)
-    step_vel(config, b, 0.5*config.dt, &tnow, &tvel)
-
     # ------------------------------------------------------------------------
 
     # ------------------------------------------------------------------------
     # Tidal start: slowly turn on tidal field
+
+    # Initialize velocities (take a half step in time)
+    step_vel(config, b, 0.5*config.dt, &tnow, &tvel)
 
     for i in range(config.n_tidal):
         PyErr_CheckSignals() # check for keyboard interrupts
@@ -349,8 +369,7 @@ def run_scf(CPotentialWrapper cp,
 
     # Write initial positions out after tidal start
     write_snap(output_file, i=0, j=0, t=tnow, tub=tub,
-               xyz_in=(x, y, z), vxyz_in=(vx, vy, vz),
-               frame_xyz=(f.x,f.y,f.z), frame_vxyz=(f.vx,f.vy,f.vz),
+               xyz=(x, y, z), vxyz=(vx, vy, vz),
                Ekin=Ekin, Epot_bfe=Epot_bfe, Epot_ext=Epot_ext,
                write_energy=write_energy)
 
@@ -359,14 +378,7 @@ def run_scf(CPotentialWrapper cp,
 
     # ------------------------------------------------------------------------
 
-    frame_xyz[0,0] = f.x
-    frame_xyz[1,0] = f.y
-    frame_xyz[2,0] = f.z
-    frame_vxyz[0,0] = f.vx
-    frame_vxyz[1,0] = f.vy
-    frame_vxyz[2,0] = f.vz
-
-    j = 1 # snapshot number
+    j = 1 # snapshot number (we already wrote 0)
     wrote = None
 
     if show_progress:
@@ -393,8 +405,7 @@ def run_scf(CPotentialWrapper cp,
 
         if config.n_snapshot > 0 and (((i+1) % config.n_snapshot) == 0 and i > 0):
             write_snap(output_file, i+1, j, t=tnow, tub=tub,
-                       xyz_in=(x, y, z), vxyz_in=(vx, vy, vz),
-                       frame_xyz=(f.x,f.y,f.z), frame_vxyz=(f.vx,f.vy,f.vz),
+                       xyz=(x, y, z), vxyz=(vx, vy, vz),
                        Ekin=Ekin, Epot_bfe=Epot_bfe, Epot_ext=Epot_ext,
                        write_energy=write_energy)
             j += 1
@@ -408,8 +419,7 @@ def run_scf(CPotentialWrapper cp,
     # Always write the last timestep (if it wasn't written already), even if n_snapshot==0
     if not wrote:
         write_snap(output_file, i+1, j, t=tnow, tub=tub,
-                   xyz_in=(x, y, z), vxyz_in=(vx, vy, vz),
-                   frame_xyz=(f.x,f.y,f.z), frame_vxyz=(f.vx,f.vy,f.vz),
+                   xyz=(x, y, z), vxyz=(vx, vy, vz),
                    Ekin=Ekin, Epot_bfe=Epot_bfe, Epot_ext=Epot_ext,
                    write_energy=write_energy)
 

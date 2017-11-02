@@ -58,13 +58,13 @@ cdef void recenter_frame(Config config, Bodies b, COMFrame *f):
 
     for i in range(nend):
         k = f.pot_idx[i]
-        center_of_mass[0] = center_of_mass[0] + b.mass[k]*b.x[k]
-        center_of_mass[1] = center_of_mass[1] + b.mass[k]*b.y[k]
-        center_of_mass[2] = center_of_mass[2] + b.mass[k]*b.z[k]
+        center_of_mass[0] = center_of_mass[0] + b.mass[k] * (b.x[k] - f.x)
+        center_of_mass[1] = center_of_mass[1] + b.mass[k] * (b.y[k] - f.y)
+        center_of_mass[2] = center_of_mass[2] + b.mass[k] * (b.z[k] - f.z)
 
-        center_of_mass[3] = center_of_mass[3] + b.mass[k]*b.vx[k]
-        center_of_mass[4] = center_of_mass[4] + b.mass[k]*b.vy[k]
-        center_of_mass[5] = center_of_mass[5] + b.mass[k]*b.vz[k]
+        center_of_mass[3] = center_of_mass[3] + b.mass[k] * (b.vx[k] - f.vx)
+        center_of_mass[4] = center_of_mass[4] + b.mass[k] * (b.vy[k] - f.vy)
+        center_of_mass[5] = center_of_mass[5] + b.mass[k] * (b.vz[k] - f.vz)
 
         total_mass = total_mass + b.mass[k]
 
@@ -80,15 +80,16 @@ cdef void recenter_frame(Config config, Bodies b, COMFrame *f):
     (f.vy) = f.vy + center_of_mass[4]
     (f.vz) = f.vz + center_of_mass[5]
 
+    # TODO: is this really necessary?
     # Shift all positions to be oriented on the center-of-mass frame
-    for k in range(config.n_bodies):
-        b.x[k] = b.x[k] - center_of_mass[0]
-        b.y[k] = b.y[k] - center_of_mass[1]
-        b.z[k] = b.z[k] - center_of_mass[2]
+    # for k in range(config.n_bodies):
+    #     b.x[k] = b.x[k] - center_of_mass[0]
+    #     b.y[k] = b.y[k] - center_of_mass[1]
+    #     b.z[k] = b.z[k] - center_of_mass[2]
 
-        b.vx[k] = b.vx[k] - center_of_mass[3]
-        b.vy[k] = b.vy[k] - center_of_mass[4]
-        b.vz[k] = b.vz[k] - center_of_mass[5]
+    #     b.vx[k] = b.vx[k] - center_of_mass[3]
+    #     b.vy[k] = b.vy[k] - center_of_mass[4]
+    #     b.vz[k] = b.vz[k] - center_of_mass[5]
 
 cdef void check_progenitor(int iter, Config config, Bodies b, Placeholders p,
                       COMFrame *f, CPotential *pot, double *tnow):
@@ -119,18 +120,18 @@ cdef void check_progenitor(int iter, Config config, Bodies b, Placeholders p,
     cdef:
         double m_prog = 10000000000.
         double m_safe
-        double vx_rel, vy_rel, vz_rel
         int k,n
         int N_MASS_ITER = 30 # TODO: set in config?
         int not_firstc = 0
         int broke = 0
+        double vx,vy,vz
 
     for k in range(config.n_bodies):
-        vx_rel = b.vx[k] - f.vx
-        vy_rel = b.vy[k] - f.vy
-        vz_rel = b.vz[k] - f.vz
+        vx = b.vx[k] - f.vx
+        vy = b.vy[k] - f.vy
+        vz = b.vz[k] - f.vz
 
-        p.kin0[k] = 0.5*(vx_rel*vx_rel + vy_rel*vy_rel + vz_rel*vz_rel); # relative
+        p.kin0[k] = 0.5*(vx*vx + vy*vy + vz*vz)
         p.pot0[k] = b.Epot_bfe[k] # potential energy in satellite
         p.ax0[k] = b.ax[k]
         p.ay0[k] = b.ay[k]

@@ -4,7 +4,7 @@ from structs cimport Config, Placeholders, Bodies, COMFrame
 cdef void internal_bfe_init(Config config, Placeholders p)
 
 cdef void internal_bfe_field(Config config, Bodies b, Placeholders p,
-                             int *firstc)
+                             COMFrame *f, int *firstc)
 
 cdef void external_field(Config config, Bodies b, COMFrame *f,
                          CPotential *pot, double strength, double *tnow)

@@ -79,7 +79,7 @@ cdef void internal_bfe_init(Config config, Placeholders p):
     if config.zeroeven:
         p.lmin[0] = 1
 
-cdef void internal_bfe_field(Config config, Bodies b, Placeholders p,
+cdef void internal_bfe_field(Config config, Bodies b, Placeholders p, COMFrame *f,
                              int *firstc):
     """
     Compute the acceleration and potential energy from the basis function
@@ -108,6 +108,7 @@ cdef void internal_bfe_field(Config config, Bodies b, Placeholders p,
         double temp3, temp4, temp5, temp6, ttemp5
         double ar, ath, aphi, cosp, sinp, phinltil, sinth
         double clm, dlm, elm, flm
+        double xx, yy, zz
         int lmax = config.lmax
         int nmax = config.nmax
         # double cosmphi[lmax+1], sinmphi[lmax+1]
@@ -138,13 +139,15 @@ cdef void internal_bfe_field(Config config, Bodies b, Placeholders p,
                 p.cossum[i1] = 0.
 
     # This loop computes the BFE coefficients for all bound particles.
-    # TODO: I think this loop can't be parallel as is because each iteration
-    # modifies the same array location in memory.
     for k in range(0, config.n_bodies):
         if b.ibound[k] > 0: # skip unbound particles
-            r = sqrt(b.x[k]*b.x[k] + b.y[k]*b.y[k] + b.z[k]*b.z[k])
-            costh = b.z[k] / r
-            phi = atan2(b.y[k], b.x[k])
+            xx = b.x[k] - f.x
+            yy = b.y[k] - f.y
+            zz = b.z[k] - f.z
+
+            r = sqrt(xx*xx + yy*yy + zz*zz)
+            costh = zz / r
+            phi = atan2(yy, xx)
             xi = (r - 1.) / (r + 1.)
 
             # precompute all cos(m*phi), sin(m*phi)
@@ -206,14 +209,16 @@ cdef void internal_bfe_field(Config config, Bodies b, Placeholders p,
 
     # This loop computes the acceleration and potential at each particle given
     # the BFE coeffs.
-    # TODO: this loop I think *can* be parallelized, since we're filling
-    # different places in memory for each body
     with nogil, parallel():
         # for k in range(0, config.n_bodies):
         for k in prange(config.n_bodies, schedule='guided'):
-            r = sqrt(b.x[k]*b.x[k] + b.y[k]*b.y[k] + b.z[k]*b.z[k])
-            costh = b.z[k] / r
-            phi = atan2(b.y[k], b.x[k])
+            xx = b.x[k] - f.x
+            yy = b.y[k] - f.y
+            zz = b.z[k] - f.z
+
+            r = sqrt(xx*xx + yy*yy + zz*zz)
+            costh = zz / r
+            phi = atan2(yy, xx)
             xi = (r - 1.) / (r + 1.)
 
             # precompute all cos(m*phi), sin(m*phi)
@@ -321,7 +326,9 @@ cdef void internal_bfe_field(Config config, Bodies b, Placeholders p,
             b.Epot_bfe[k] = b.Epot_bfe[k]*config.G
 
             # Update kinetic energy
-            b.Ekin[k] = 0.5*(b.vx[k]*b.vx[k] + b.vy[k]*b.vy[k] + b.vz[k]*b.vz[k])
+            b.Ekin[k] = 0.5 * ((b.vx[k]-f.vx)**2 +
+                               (b.vy[k]-f.vy)**2 +
+                               (b.vz[k]-f.vz)**2)
 
 cdef void external_field(Config config, Bodies b, COMFrame *f,
                          CPotential *pot, double strength, double *tnow):
@@ -334,9 +341,9 @@ cdef void external_field(Config config, Bodies b, COMFrame *f,
         double q[3]
 
     for k in range(config.n_bodies):
-        q[0] = b.x[k] + f.x
-        q[1] = b.y[k] + f.y
-        q[2] = b.z[k] + f.z
+        q[0] = b.x[k]
+        q[1] = b.y[k]
+        q[2] = b.z[k]
 
         # Compute external potential gradient
         c_gradient(pot, tnow[0], &q[0], &grad[0])
@@ -373,7 +380,7 @@ cdef void update_acceleration(Config config, Bodies b, Placeholders p,
     cdef int j,k
 
     if config.selfgravitating:
-        internal_bfe_field(config, b, p, firstc)
+        internal_bfe_field(config, b, p, f, firstc)
         external_field(config, b, f, pot, extern_strength, tnow)
 
     else:
