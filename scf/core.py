@@ -87,8 +87,9 @@ class SCFSimulation(object):
 
     # @u.quantity_input(dt=u.Myr)
     def run(self, w0, dt, n_steps, t0=0.,
-            n_snapshot=None, n_tidal=256,
-            snapshot_filename="scfoutput.h5", overwrite=False):
+            n_snapshot=None, n_tidal=256, n_recenter=1,
+            snapshot_filename="scfoutput.h5", overwrite=False,
+            show_progress=False):
         """
         Run the N-body simulation.
 
@@ -108,13 +109,14 @@ class SCFSimulation(object):
             phase-space positions of the bodies.
         n_tidal : int (optional)
             Number of steps to slowly turn on the external tidal field.
+        n_recenter : int (optional)
+            After how many steps should we recenter the basis function field.
         snapshot_filename : str (optional)
             Name of the file to store simulation snapshots.
         overwrite : bool (optional)
             Overwrite existing file.
-
-        TODO: n_recenter is set to 1 because I was having issues with
-        energy conservation...
+        show_progress : bool (optional)
+            Display a progress bar for the timestep iteration loop.
 
         """
         if not isinstance(w0, gd.PhaseSpacePosition):
@@ -124,7 +126,6 @@ class SCFSimulation(object):
         if n_snapshot is None:
             n_snapshot = 0
 
-        n_recenter = 1
         if n_recenter <= 0:
             raise ValueError("n_recenter must be > 0")
 
@@ -142,7 +143,7 @@ class SCFSimulation(object):
                 nmax=self.nmax, lmax=self.lmax,
                 zero_odd=self.zero_odd, zero_even=self.zero_even,
                 self_gravity=self.self_gravity, output_file=output_file,
-                write_energy=self.write_energy)
+                write_energy=self.write_energy, show_progress=show_progress)
 
     @staticmethod
     def units_from_scales(mass_scale, length_scale):

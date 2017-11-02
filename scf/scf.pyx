@@ -74,10 +74,10 @@ def write_snap(output_file, i, j, t, xyz_in, vxyz_in, tub, frame_xyz, frame_vxyz
             eg.create_dataset('potential_int', data=np.array(Epot_bfe).astype(output_dtype))
             eg.create_dataset('potential_ext', data=np.array(Epot_ext).astype(output_dtype))
 
-    logger.debug("\t...wrote snapshot {0} to output file".format(j))
+    logger.debug("Writing snapshot {0}".format(j))
 
 cdef void step_system(int iter, Config config, Bodies b, Placeholders p, COMFrame *f,
-                      CPotential *pot, double *tnow, double *tpos, double *tvel):
+                      CPotential *pot, double *tnow, double *tpos, double *tvel, int n_recenter):
     cdef:
         int not_firstc = 0
         double strength = 1.
@@ -94,7 +94,10 @@ cdef void step_system(int iter, Config config, Bodies b, Placeholders p, COMFram
     for i in range(config.n_bodies):
         f.pot_idx[i] = tmp[i]
 
-    recenter_frame(iter, config, b, f)
+    if iter % n_recenter == 0:
+        logger.debug("Recentering progenitor frame")
+        recenter_frame(config, b, f)
+
     update_acceleration(config, b, p, f, pot,
                         strength, tnow, &not_firstc)
     step_vel(config, b, config.dt, tnow, tvel)
@@ -103,7 +106,7 @@ def run_scf(CPotentialWrapper cp,
             w0, bodies, mass_scale, length_scale,
             dt, n_steps, t0, n_snapshot, n_recenter, n_tidal,
             nmax, lmax, zero_odd, zero_even, self_gravity, output_file,
-            write_energy):
+            write_energy, show_progress=False):
     cdef:
         int firstc = 1
         Config config
@@ -318,7 +321,7 @@ def run_scf(CPotentialWrapper cp,
     tmp = np.argsort(Epot_bfe).astype(np.int32)
     for i in range(N):
         pot_idx[i] = tmp[i]
-    recenter_frame(0, config, b, &f)
+    recenter_frame(config, b, &f)
 
     # Initialize velocities (take a half step in time)
     step_vel(config, b, 0.5*config.dt, &tnow, &tvel)
@@ -341,7 +344,7 @@ def run_scf(CPotentialWrapper cp,
     tmp = np.argsort(Epot_bfe).astype(np.int32)
     for i in range(N):
         pot_idx[i] = tmp[i] # (f->pot_idx) points to this
-    recenter_frame(0, config, b, &f)
+    recenter_frame(config, b, &f)
     check_progenitor(0, config, b, p, &f, &(cp.cpotential), &tnow)
 
     # Write initial positions out after tidal start
@@ -365,10 +368,17 @@ def run_scf(CPotentialWrapper cp,
 
     j = 1 # snapshot number
     wrote = None
-    for i in range(config.n_steps):
+
+    if show_progress:
+        from tqdm import trange
+        iter_func = trange(config.n_steps)
+    else:
+        iter_func = range(config.n_steps)
+
+    for i in iter_func:
         PyErr_CheckSignals()
-        step_system(i+1, config, b, p, &f, &(cp.cpotential), &tnow, &tpos, &tvel)
-        logger.debug("Step: {}".format(i+1))
+        step_system(i+1, config, b, p, &f, &(cp.cpotential), &tnow, &tpos, &tvel,
+                    config.n_recenter)
 
         frame_xyz[0,i+1] = f.x
         frame_xyz[1,i+1] = f.y
@@ -379,7 +389,7 @@ def run_scf(CPotentialWrapper cp,
 
         step_vel(config, b, -0.5*config.dt, &tnow, &tvel)
         check_progenitor(i, config, b, p, &f, &(cp.cpotential), &tnow)
-        logger.debug("Fraction of progenitor mass bound: {:.5f}".format(f.m_prog))
+        logger.debug("Step {0}, bound mass: {1:.0%}".format(i, f.m_prog))
 
         if config.n_snapshot > 0 and (((i+1) % config.n_snapshot) == 0 and i > 0):
             write_snap(output_file, i+1, j, t=tnow, tub=tub,

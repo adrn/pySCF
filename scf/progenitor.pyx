@@ -24,14 +24,12 @@ from .acceleration cimport update_acceleration
 
 # -----------------------------------------------------------------------------
 
-cdef void recenter_frame(int iter, Config config, Bodies b, COMFrame *f):
+cdef void recenter_frame(Config config, Bodies b, COMFrame *f):
     """
     Recompute the center-of-mass frame.
 
     Parameters
     ----------
-    iter : int
-        The current iteration.
     config : Config (struct)
         Struct containing configuration parameters.
     b : Bodies (struct)
