@@ -68,14 +68,18 @@ def write_snap(output_file, i, j, t, xyz, vxyz, tub,
 
         if write_energy:
             eg = g.create_group('energy')
-            eg.create_dataset('kinetic', data=np.array(Ekin).astype(output_dtype))
-            eg.create_dataset('potential_int', data=np.array(Epot_bfe).astype(output_dtype))
-            eg.create_dataset('potential_ext', data=np.array(Epot_ext).astype(output_dtype))
+            eg.create_dataset('kinetic_int',
+                              data=np.array(Ekin).astype(output_dtype))
+            eg.create_dataset('potential_int',
+                              data=np.array(Epot_bfe).astype(output_dtype))
+            eg.create_dataset('potential_ext',
+                              data=np.array(Epot_ext).astype(output_dtype))
 
     logger.debug("Writing snapshot {0}".format(j))
 
-cdef void step_system(int iter, Config config, Bodies b, Placeholders p, COMFrame *f,
-                      CPotential *pot, double *tnow, double *tpos, double *tvel, int n_recenter):
+cdef void step_system(int iter, Config config, Bodies b, Placeholders p,
+                      COMFrame *f, CPotential *pot, double *tnow, double *tpos,
+                      double *tvel, int n_recenter):
     cdef:
         int not_firstc = 0
         double strength = 1.
@@ -104,7 +108,7 @@ def run_scf(CPotentialWrapper cp,
             w0, bodies, mass_scale, length_scale,
             dt, n_steps, t0, n_snapshot, n_recenter, n_tidal,
             nmax, lmax, zero_odd, zero_even, self_gravity, output_file,
-            write_energy, show_progress=False):
+            write_energy, show_progress=False, output_dtype=np.float64):
     cdef:
         int firstc = 1
         Config config
@@ -369,7 +373,7 @@ def run_scf(CPotentialWrapper cp,
     write_snap(output_file, i=0, j=0, t=tnow, tub=tub,
                xyz=(x, y, z), vxyz=(vx, vy, vz),
                Ekin=Ekin, Epot_bfe=Epot_bfe, Epot_ext=Epot_ext,
-               write_energy=write_energy)
+               write_energy=write_energy, output_dtype=output_dtype)
 
     # Reset the velocities to being 1/2 step ahead of the positions
     step_vel(config, b, 0.5*config.dt, &tnow, &tvel)
@@ -406,7 +410,7 @@ def run_scf(CPotentialWrapper cp,
             write_snap(output_file, i+1, j, t=tnow, tub=tub,
                        xyz=(x, y, z), vxyz=(vx, vy, vz),
                        Ekin=Ekin, Epot_bfe=Epot_bfe, Epot_ext=Epot_ext,
-                       write_energy=write_energy)
+                       write_energy=write_energy, output_dtype=output_dtype)
             j += 1
             wrote = True
 
@@ -422,7 +426,7 @@ def run_scf(CPotentialWrapper cp,
         write_snap(output_file, i+1, j, t=tnow, tub=tub,
                    xyz=(x, y, z), vxyz=(vx, vy, vz),
                    Ekin=Ekin, Epot_bfe=Epot_bfe, Epot_ext=Epot_ext,
-                   write_energy=write_energy)
+                   write_energy=write_energy, output_dtype=output_dtype)
 
     with h5py.File(output_file, 'r+') as out_f:
         out_f.create_dataset('/cen/pos',

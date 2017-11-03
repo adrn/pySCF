@@ -52,7 +52,7 @@ class SCFSimulation(object):
     def __init__(self, bodies, potential, mass_scale, length_scale,
                  self_gravity=True, nmax=6, lmax=4,
                  zero_odd=False, zero_even=False,
-                 output_path=None, write_energy=False):
+                 output_path=None, write_energy=False, output_dtype=np.float64):
 
         if not isinstance(bodies, gd.PhaseSpacePosition):
             raise ValueError("bodies must be a PhaseSpacePosition instance.")
@@ -84,6 +84,7 @@ class SCFSimulation(object):
                                     **self.potential.parameters)
 
         self.write_energy = write_energy
+        self.output_dtype = output_dtype
 
     # @u.quantity_input(dt=u.Myr)
     def run(self, w0, dt, n_steps, t0=0.,
@@ -148,7 +149,8 @@ class SCFSimulation(object):
                 nmax=self.nmax, lmax=self.lmax,
                 zero_odd=self.zero_odd, zero_even=self.zero_even,
                 self_gravity=self.self_gravity, output_file=output_file,
-                write_energy=self.write_energy, show_progress=show_progress)
+                write_energy=self.write_energy, show_progress=show_progress,
+                output_dtype=self.output_dtype)
 
     @staticmethod
     def units_from_scales(mass_scale, length_scale):
