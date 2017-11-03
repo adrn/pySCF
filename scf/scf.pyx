@@ -416,7 +416,8 @@ def run_scf(CPotentialWrapper cp,
         # Complete the full step in velocity
         step_vel(config, b, 0.5*config.dt, &tnow, &tvel)
 
-    # Always write the last timestep (if it wasn't written already), even if n_snapshot==0
+    # Always write the last timestep (if it wasn't written already), even if
+    # n_snapshot==0
     if not wrote:
         write_snap(output_file, i+1, j, t=tnow, tub=tub,
                    xyz=(x, y, z), vxyz=(vx, vy, vz),

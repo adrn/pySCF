@@ -177,7 +177,7 @@ cdef void internal_bfe_field(Config config, Bodies b, Placeholders p, COMFrame *
                 i1 = getIndex2D(m,m,lmax+1)
                 p.plm[i1] = 1.0
                 if m > 0:
-                    p.plm[i1] = (-1)**m * p.dblfact[m] * sqrt(1.-costh*costh)**m
+                    p.plm[i1] = (-1)**m * p.dblfact[m] * (1.-costh*costh)**(m/2.)
 
                 plm1m = p.plm[i1]
                 plm2m = 0.0
