@@ -353,7 +353,13 @@ def run_scf(CPotentialWrapper cp,
     # Initialize velocities (take a half step in time)
     step_vel(config, b, 0.5*config.dt, &tnow, &tvel)
 
-    for i in range(config.n_tidal):
+    if show_progress:
+        from tqdm import trange
+        iter_func = trange(config.n_tidal, desc='Tidal start')
+    else:
+        iter_func = range(config.n_tidal)
+
+    for i in iter_func:
         PyErr_CheckSignals() # check for keyboard interrupts
         tidal_start(i, config, b, p, &f,
                     &(cp.cpotential), &tnow, &tpos, &tvel)
@@ -385,7 +391,7 @@ def run_scf(CPotentialWrapper cp,
 
     if show_progress:
         from tqdm import trange
-        iter_func = trange(config.n_steps)
+        iter_func = trange(config.n_steps, desc='N-body')
     else:
         iter_func = range(config.n_steps)
 
