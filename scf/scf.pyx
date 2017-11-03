@@ -74,8 +74,6 @@ def write_snap(output_file, i, j, t, xyz, vxyz, tub,
 
     logger.debug("Writing snapshot {0}".format(j))
 
-# TODO: here we should only move the velocity by a half step to avoid the extra
-# step_vel calls in run_scf below!
 cdef void step_system(int iter, Config config, Bodies b, Placeholders p, COMFrame *f,
                       CPotential *pot, double *tnow, double *tpos, double *tvel, int n_recenter):
     cdef:
@@ -100,7 +98,7 @@ cdef void step_system(int iter, Config config, Bodies b, Placeholders p, COMFram
 
     update_acceleration(config, b, p, f, pot,
                         strength, tnow, &not_firstc)
-    step_vel(config, b, config.dt, tnow, tvel)
+    step_vel(config, b, 0.5*config.dt, tnow, tvel)
 
 def run_scf(CPotentialWrapper cp,
             w0, bodies, mass_scale, length_scale,
@@ -389,8 +387,10 @@ def run_scf(CPotentialWrapper cp,
 
     for i in iter_func:
         PyErr_CheckSignals()
-        step_system(i+1, config, b, p, &f, &(cp.cpotential), &tnow, &tpos, &tvel,
-                    config.n_recenter)
+
+        # Steps position by 1 step, velocity by 1/2 step
+        step_system(i+1, config, b, p, &f, &(cp.cpotential), &tnow, &tpos,
+                    &tvel, config.n_recenter)
 
         frame_xyz[0,i+1] = f.x
         frame_xyz[1,i+1] = f.y
@@ -399,7 +399,6 @@ def run_scf(CPotentialWrapper cp,
         frame_vxyz[1,i+1] = f.vy
         frame_vxyz[2,i+1] = f.vz
 
-        step_vel(config, b, -0.5*config.dt, &tnow, &tvel)
         check_progenitor(i, config, b, p, &f, &(cp.cpotential), &tnow)
         logger.debug("Step {0}, bound mass: {1:.0%}".format(i, f.m_prog))
 
@@ -414,6 +413,7 @@ def run_scf(CPotentialWrapper cp,
         else:
             wrote = False
 
+        # Complete the full step in velocity
         step_vel(config, b, 0.5*config.dt, &tnow, &tvel)
 
     # Always write the last timestep (if it wasn't written already), even if n_snapshot==0
