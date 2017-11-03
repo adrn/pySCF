@@ -402,7 +402,7 @@ def run_scf(CPotentialWrapper cp,
         check_progenitor(i, config, b, p, &f, &(cp.cpotential), &tnow)
         logger.debug("Step {0}, bound mass: {1:.0%}".format(i, f.m_prog))
 
-        if config.n_snapshot > 0 and (((i+1) % config.n_snapshot) == 0 and i > 0):
+        if config.n_snapshot > 0 and (((i+1) % config.n_snapshot) == 0 and i>0):
             write_snap(output_file, i+1, j, t=tnow, tub=tub,
                        xyz=(x, y, z), vxyz=(vx, vy, vz),
                        Ekin=Ekin, Epot_bfe=Epot_bfe, Epot_ext=Epot_ext,
@@ -425,7 +425,7 @@ def run_scf(CPotentialWrapper cp,
                    write_energy=write_energy)
 
     with h5py.File(output_file, 'r+') as out_f:
-        out_f.create_dataset('/cen/pos', dtype=np.float64, shape=np.array(frame_xyz).shape,
-                             data=np.array(frame_xyz))
-        out_f.create_dataset('/cen/vel', dtype=np.float64, shape=np.array(frame_vxyz).shape,
-                             data=np.array(frame_vxyz))
+        out_f.create_dataset('/cen/pos',
+                             data=np.array(frame_xyz).astype(output_dtype))
+        out_f.create_dataset('/cen/vel',
+                             data=np.array(frame_vxyz).astype(output_dtype))

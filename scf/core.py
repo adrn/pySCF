@@ -87,7 +87,7 @@ class SCFSimulation(object):
 
     # @u.quantity_input(dt=u.Myr)
     def run(self, w0, dt, n_steps, t0=0.,
-            n_snapshot=None, n_tidal=256, n_recenter=1,
+            n_snapshot=None, n_tidal=256,
             snapshot_filename="scfoutput.h5", overwrite=False,
             show_progress=False):
         """
@@ -109,8 +109,6 @@ class SCFSimulation(object):
             phase-space positions of the bodies.
         n_tidal : int (optional)
             Number of steps to slowly turn on the external tidal field.
-        n_recenter : int (optional)
-            After how many steps should we recenter the basis function field.
         snapshot_filename : str (optional)
             Name of the file to store simulation snapshots.
         overwrite : bool (optional)
@@ -126,6 +124,13 @@ class SCFSimulation(object):
         if n_snapshot is None:
             n_snapshot = 0
 
+        # TODO: in the current implementation, we differ from the original
+        # implementation. Because the particle positions and velocities are
+        # stored as absolute (in the external potential frame), we have to
+        # recenter the BFE coordinates at every step. This doesn't have to be
+        # the case, but also does not incur a huge performance hit so leaving
+        # as is for now.
+        n_recenter = 1
         if n_recenter <= 0:
             raise ValueError("n_recenter must be > 0")
 
