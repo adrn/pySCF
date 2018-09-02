@@ -92,6 +92,7 @@ cpdef _test_internal_bfe_field(bodies):
         Config config
         Placeholders p
         Bodies b
+        COMFrame f
 
         int nmax = 6
         int lmax = 4
@@ -177,7 +178,15 @@ cpdef _test_internal_bfe_field(bodies):
     p.c2 = &c2[0,0]
     p.c3 = &c3[0]
 
-    internal_bfe_field(config, b, p, &firstc)
+    f.m_prog = 1.
+    f.x = 0.
+    f.y = 0.
+    f.z = 0.
+    f.vx = 0.
+    f.vy = 0.
+    f.vz = 0.
+
+    internal_bfe_field(config, b, p, &f, &firstc)
 
     return {
         'sinsum': sinsum,
@@ -376,7 +385,7 @@ cpdef _test_tidal_start(CPotentialWrapper cp, w0, bodies, n_tidal, length_scale,
     tmp = np.argsort(Epot_bfe).astype(np.int32)
     for i in range(N):
         pot_idx[i] = tmp[i]
-    recenter_frame(0, config, b, &f)
+    recenter_frame(config, b, &f)
 
     # initialize velocities (take a half step in time)
     step_vel(config, b, 0.5*config.dt, &tnow, &tvel)
@@ -419,7 +428,7 @@ cpdef _test_tidal_start(CPotentialWrapper cp, w0, bodies, n_tidal, length_scale,
     for i in range(N):
         pot_idx[i] = tmp[i]
 
-    recenter_frame(0, config, b, &f)
+    recenter_frame(config, b, &f)
     check_progenitor(0, config, b, p, &f, &(cp.cpotential), &tnow)
 
     return {
