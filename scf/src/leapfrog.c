@@ -1,4 +1,4 @@
-#include "scf.h"
+#include "structs.h"
 
 void step_pos(Config config, Bodies b, double dt,
               double *tnow, double *tpos) {

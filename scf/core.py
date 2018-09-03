@@ -44,13 +44,15 @@ class SCFSimulation(object):
     zero_even : bool (optional)
         Set all even terms in the basis function expansion of the satellite
         potential (default = False).
+    write_energy : bool (optional)
+        Also output energies, useful for debugging.
     """
 
     @u.quantity_input(mass_scale=u.Msun, length_scale=u.kpc)
     def __init__(self, bodies, potential, mass_scale, length_scale,
                  self_gravity=True, nmax=6, lmax=4,
                  zero_odd=False, zero_even=False,
-                 output_path=None):
+                 output_path=None, write_energy=False, output_dtype=np.float64):
 
         if not isinstance(bodies, gd.PhaseSpacePosition):
             raise ValueError("bodies must be a PhaseSpacePosition instance.")
@@ -81,10 +83,14 @@ class SCFSimulation(object):
         self._potential = Potential(units=self.units,
                                     **self.potential.parameters)
 
+        self.write_energy = write_energy
+        self.output_dtype = output_dtype
+
     # @u.quantity_input(dt=u.Myr)
     def run(self, w0, dt, n_steps, t0=0.,
             n_snapshot=None, n_tidal=256,
-            snapshot_filename="scfoutput.h5", overwrite=False):
+            snapshot_filename="scfoutput.h5", overwrite=False,
+            show_progress=False):
         """
         Run the N-body simulation.
 
@@ -108,9 +114,8 @@ class SCFSimulation(object):
             Name of the file to store simulation snapshots.
         overwrite : bool (optional)
             Overwrite existing file.
-
-        TODO: n_recenter is set to 1 because I was having issues with
-        energy conservation...
+        show_progress : bool (optional)
+            Display a progress bar for the timestep iteration loop.
 
         """
         if not isinstance(w0, gd.PhaseSpacePosition):
@@ -120,6 +125,12 @@ class SCFSimulation(object):
         if n_snapshot is None:
             n_snapshot = 0
 
+        # TODO: in the current implementation, we differ from the original
+        # implementation. Because the particle positions and velocities are
+        # stored as absolute (in the external potential frame), we have to
+        # recenter the BFE coordinates at every step. This doesn't have to be
+        # the case, but also does not incur a huge performance hit so leaving
+        # as is for now.
         n_recenter = 1
         if n_recenter <= 0:
             raise ValueError("n_recenter must be > 0")
@@ -137,7 +148,9 @@ class SCFSimulation(object):
                 n_snapshot=n_snapshot, n_recenter=n_recenter, n_tidal=n_tidal,
                 nmax=self.nmax, lmax=self.lmax,
                 zero_odd=self.zero_odd, zero_even=self.zero_even,
-                self_gravity=self.self_gravity, output_file=output_file)
+                self_gravity=self.self_gravity, output_file=output_file,
+                write_energy=self.write_energy, show_progress=show_progress,
+                output_dtype=self.output_dtype)
 
     @staticmethod
     def units_from_scales(mass_scale, length_scale):

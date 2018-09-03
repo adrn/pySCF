@@ -6,10 +6,6 @@
 # cython: wraparound=False
 # cython: profile=False
 
-from __future__ import division, print_function
-
-__author__ = "adrn <adrn@astro.columbia.edu>"
-
 # Standard library
 import os
 import sys
@@ -25,110 +21,20 @@ import cython
 cimport cython
 from cpython.exc cimport PyErr_CheckSignals
 
-from gala.potential.potential.cpotential cimport CPotentialWrapper
+from libc.math cimport sqrt
 
-cdef extern from "math.h":
-    double sqrt(double)
+from gala.potential.potential.cpotential cimport (CPotentialWrapper,
+                                                  CPotential)
 
-cdef extern from "potential/src/cpotential.h":
-    ctypedef struct CPotential:
-        pass
+from ..structs cimport (Config, Placeholders, Bodies, COMFrame,
+                        step_pos, step_vel)
+from ..acceleration cimport (internal_bfe_init, internal_bfe_field,
+                             update_acceleration)
+from ..progenitor cimport (recenter_frame, check_progenitor, tidal_start)
 
 cdef extern from "src/helpers.h":
     int getIndex2D(int row, int col, int ncol)
     int getIndex3D(int row, int col, int dep, int ncol, int ndep)
-
-cdef extern from "src/scf.h":
-    ctypedef struct Config:
-        int n_steps
-        double dt
-        double t0
-        int n_bodies
-        int n_recenter
-        int n_snapshot
-        int n_tidal
-        int nmax
-        int lmax
-        int zeroodd
-        int zeroeven
-        int selfgravitating
-        double ru
-        double mu
-        double vu
-        double tu
-        double G
-
-    ctypedef struct Placeholders:
-        double *dblfact
-        double *twoalpha
-        double *anltilde
-        double *coeflm
-        double *plm
-        double *dplm
-        double *ultrasp
-        double *ultraspt
-        double *ultrasp1
-        double *sinsum
-        double *cossum
-        double *c1
-        double *c2
-        double *c3
-        int *lmin
-        int *lskip
-        double *pot0
-        double *kin0
-        double *ax0
-        double *ay0
-        double *az0
-
-    ctypedef struct Bodies:
-        double *x
-        double *y
-        double *z
-        double *vx
-        double *vy
-        double *vz
-        double *ax
-        double *ay
-        double *az
-        double *Epot_ext;
-        double *Epot_bfe;
-        double *Ekin;
-        double *mass
-        int *ibound
-        double *tub
-
-    ctypedef struct COMFrame:
-        double m_prog
-        double x
-        double y
-        double z
-        double vx
-        double vy
-        double vz
-        int *pot_idx
-
-    void accp_firstc(Config config, Placeholders p) nogil
-    void accp_bfe(Config config, Bodies b, Placeholders p, int *firstc) nogil
-
-    void acc_pot(Config config, Bodies b, Placeholders p, COMFrame *f,
-                 CPotential *pot, double extern_strength, double *tnow,
-                 int *firstc) nogil
-
-    void frame(int iter, Config config, Bodies b, COMFrame *f) nogil
-
-    void step_vel(Config config, Bodies b, double dt,
-                  double *tnow, double *tvel) nogil
-
-    void step_pos(Config config, Bodies b, double dt,
-                  double *tnow, double *tvel) nogil
-
-    void tidal_start(int iter, Config config, Bodies b, Placeholders p,
-                     COMFrame *f, CPotential *pot,
-                     double *tnow, double *tpos, double *tvel) nogil
-
-    void check_progenitor(int iter, Config config, Bodies b, Placeholders p,
-                          COMFrame *f, CPotential *pot, double *tnow) nogil
 
 cpdef wrap_getIndex2D(int row, int col, int ncol):
     return getIndex2D(row, col, ncol)
@@ -136,7 +42,7 @@ cpdef wrap_getIndex2D(int row, int col, int ncol):
 cpdef wrap_getIndex3D(int row, int col, int dep, int ncol, int ndep):
     return getIndex3D(row, col, dep, ncol, ndep)
 
-cpdef _test_accp_firstc(int nmax, int lmax):
+cpdef _test_internal_bfe_init(int nmax, int lmax):
     cdef:
         Config config
         Placeholders p
@@ -169,7 +75,7 @@ cpdef _test_accp_firstc(int nmax, int lmax):
     p.c2 = &c2[0,0]
     p.c3 = &c3[0]
 
-    accp_firstc(config, p)
+    internal_bfe_init(config, p)
 
     return {
         'dblfact': dblfact,
@@ -181,11 +87,12 @@ cpdef _test_accp_firstc(int nmax, int lmax):
         'c3': c3
     }
 
-cpdef _test_accp_bfe(bodies):
+cpdef _test_internal_bfe_field(bodies):
     cdef:
         Config config
         Placeholders p
         Bodies b
+        COMFrame f
 
         int nmax = 6
         int lmax = 4
@@ -271,7 +178,15 @@ cpdef _test_accp_bfe(bodies):
     p.c2 = &c2[0,0]
     p.c3 = &c3[0]
 
-    accp_bfe(config, b, p, &firstc)
+    f.m_prog = 1.
+    f.x = 0.
+    f.y = 0.
+    f.z = 0.
+    f.vx = 0.
+    f.vy = 0.
+    f.vz = 0.
+
+    internal_bfe_field(config, b, p, &f, &firstc)
 
     return {
         'sinsum': sinsum,
@@ -286,7 +201,8 @@ cpdef _test_accp_bfe(bodies):
         'pot_bfe': Epot_bfe
     }
 
-cpdef _test_tidal_start(CPotentialWrapper cp, w0, bodies, n_tidal, length_scale, mass_scale):
+cpdef _test_tidal_start(CPotentialWrapper cp, w0, bodies, n_tidal, length_scale,
+                        mass_scale):
     cdef:
         int firstc = 1
         Config config
@@ -462,17 +378,20 @@ cpdef _test_tidal_start(CPotentialWrapper cp, w0, bodies, n_tidal, length_scale,
         vy[i] = vy[i] + f.vy
         vz[i] = vz[i] + f.vz
 
-    acc_pot(config, b, p, &f, &(cp.cpotential), extern_strength, &tnow, &firstc)
+    update_acceleration(config, b, p, &f, &(cp.cpotential), extern_strength,
+                        &tnow, &firstc)
 
     # sort particles index array on potential value
     tmp = np.argsort(Epot_bfe).astype(np.int32)
     for i in range(N):
         pot_idx[i] = tmp[i]
-    frame(0, config, b, &f)
+    recenter_frame(config, b, &f)
 
     # initialize velocities (take a half step in time)
     step_vel(config, b, 0.5*config.dt, &tnow, &tvel)
-    v_init = np.vstack((np.array(vx, copy=True), np.array(vy, copy=True), np.array(vz, copy=True)))
+    v_init = np.vstack((np.array(vx, copy=True),
+                        np.array(vy, copy=True),
+                        np.array(vz, copy=True)))
     #
     # ------------------------------------------------------------------------
 
@@ -486,22 +405,30 @@ cpdef _test_tidal_start(CPotentialWrapper cp, w0, bodies, n_tidal, length_scale,
                     &(cp.cpotential), &tnow, &tpos, &tvel)
 
         if i == 0:
-            xyz_one_step = np.vstack((np.array(x, copy=True), np.array(y, copy=True), np.array(z, copy=True)))
-            vxyz_one_step = np.vstack((np.array(vx, copy=True), np.array(vy, copy=True), np.array(vz, copy=True)))
+            xyz_one_step = np.vstack((np.array(x, copy=True),
+                                      np.array(y, copy=True),
+                                      np.array(z, copy=True)))
+            vxyz_one_step = np.vstack((np.array(vx, copy=True),
+                                       np.array(vy, copy=True),
+                                       np.array(vz, copy=True)))
 
     # Synchronize the velocities with the positions
     step_vel(config, b, -0.5*config.dt, &tnow, &tvel)
 
     # save pos, vel at end
-    xyz_end = np.vstack((np.array(x, copy=True), np.array(y, copy=True), np.array(z, copy=True)))
-    vxyz_end = np.vstack((np.array(vx, copy=True), np.array(vy, copy=True), np.array(vz, copy=True)))
+    xyz_end = np.vstack((np.array(x, copy=True),
+                         np.array(y, copy=True),
+                         np.array(z, copy=True)))
+    vxyz_end = np.vstack((np.array(vx, copy=True),
+                          np.array(vy, copy=True),
+                          np.array(vz, copy=True)))
 
     # sort particles index array on potential value
     tmp = np.argsort(Epot_bfe).astype(np.int32)
     for i in range(N):
         pot_idx[i] = tmp[i]
 
-    frame(0, config, b, &f)
+    recenter_frame(config, b, &f)
     check_progenitor(0, config, b, p, &f, &(cp.cpotential), &tnow)
 
     return {
